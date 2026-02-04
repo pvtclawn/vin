@@ -14,6 +14,7 @@ import { loadOrGenerateKeys, type NodeKeys } from './keys';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
 import { hasValidPayment, build402Response } from './x402';
 import { createProvider, type LLMProvider } from './llm';
+import { getAttestation } from './tee';
 
 // Node configuration
 const PORT = process.env.VIN_PORT ?? 3402;
@@ -68,14 +69,11 @@ const server = Bun.serve({
       return Response.json({ policies: POLICIES }, { headers });
     }
     
-    // Attestation (stub - returns 'none' until dstack deployed)
+    // Attestation (real TEE when available)
     if (path === '/v1/attestation' && req.method === 'GET') {
-      return Response.json({
-        type: 'none',
-        measurement: null,
-        report: null,
-        note: 'TEE attestation available when deployed to dstack CVM',
-      }, { headers });
+      const nodePubkey = Buffer.from(NODE_KEYS.publicKey).toString('base64url');
+      const attestation = await getAttestation('vin-node-attestation', nodePubkey);
+      return Response.json(attestation, { headers });
     }
     
     // Generate (x402 gated)
