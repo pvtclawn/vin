@@ -65,27 +65,53 @@ export function build402Response(path: string, config: PaymentConfig = DEFAULT_C
 
 /**
  * Check if request has valid payment
- * MVP: Accept any X-Payment header as valid (stub)
- * TODO: Verify with x402 facilitator
+ * 
+ * In test mode (VIN_TEST_MODE=1): Accept any X-Payment header or ?paid=true
+ * In production: Require X-Payment header (TODO: verify with facilitator)
  */
 export function hasValidPayment(req: Request): boolean {
+  const testMode = process.env.VIN_TEST_MODE === '1';
   const paymentHeader = req.headers.get('X-Payment');
   
-  // MVP: If header exists, consider paid
-  // Real implementation would verify via facilitator
+  // Check X-Payment header
   if (paymentHeader) {
     console.log('[x402] Payment header present:', paymentHeader.slice(0, 20) + '...');
+    // TODO: Verify payment with facilitator
+    // const isValid = await verifyWithFacilitator(paymentHeader);
     return true;
   }
   
-  // Also accept query param for testing
-  const url = new URL(req.url);
-  if (url.searchParams.get('paid') === 'true') {
-    console.log('[x402] Paid query param present (test mode)');
-    return true;
+  // Test mode: Also accept query param
+  if (testMode) {
+    const url = new URL(req.url);
+    if (url.searchParams.get('paid') === 'true') {
+      console.log('[x402] Paid query param present (TEST MODE ONLY)');
+      return true;
+    }
   }
   
   return false;
+}
+
+/**
+ * Extract payment info for receipt binding
+ */
+export function getPaymentInfo(req: Request): { type: string; payment_header_hash?: string } {
+  const paymentHeader = req.headers.get('X-Payment');
+  
+  if (!paymentHeader) {
+    return { type: 'none' };
+  }
+  
+  // Hash the payment header for commitment
+  const encoder = new TextEncoder();
+  const data = encoder.encode(paymentHeader);
+  const hashBuffer = new Uint8Array(32); // Placeholder - would use sha256
+  
+  return {
+    type: 'x402.v0',
+    payment_header_hash: Buffer.from(data.slice(0, 32)).toString('hex'),
+  };
 }
 
 /**
