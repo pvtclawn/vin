@@ -4,12 +4,13 @@
  * Endpoints:
  * - GET /health
  * - GET /v1/policies
- * - POST /v1/generate (TODO: x402 gating)
+ * - POST /v1/generate (x402 gated)
  * - POST /v1/verify
  */
 
 import { generateNodeKeys, createReceipt, verifyReceipt, type NodeKeys } from './receipt';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
+import { hasValidPayment, build402Response } from './x402';
 
 // Node configuration
 const PORT = process.env.VIN_PORT ?? 3402;
@@ -54,6 +55,7 @@ const server = Bun.serve({
         ok: true,
         node_pubkey: Buffer.from(NODE_KEYS.publicKey).toString('base64url'),
         version: '0.1',
+        x402: true,
       }, { headers });
     }
     
@@ -62,8 +64,13 @@ const server = Bun.serve({
       return Response.json({ policies: POLICIES }, { headers });
     }
     
-    // Generate (TODO: x402 gating)
+    // Generate (x402 gated)
     if (path === '/v1/generate' && req.method === 'POST') {
+      // Check payment
+      if (!hasValidPayment(req)) {
+        return build402Response(path);
+      }
+      
       try {
         const request = await req.json() as ActionRequestV0;
         
@@ -100,7 +107,7 @@ const server = Bun.serve({
       }
     }
     
-    // Verify
+    // Verify (free)
     if (path === '/v1/verify' && req.method === 'POST') {
       try {
         const body = await req.json() as VerifyRequest;
@@ -118,4 +125,4 @@ const server = Bun.serve({
 });
 
 console.log(`🚀 VIN Node running on http://localhost:${server.port}`);
-console.log('Endpoints: /health, /v1/policies, /v1/generate, /v1/verify');
+console.log('Endpoints: /health, /v1/policies, /v1/generate (x402), /v1/verify');
