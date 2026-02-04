@@ -33,19 +33,11 @@
 - [x] **Real LLM inference**: Anthropic adapter — Commit `9f7302c`
 - [x] **PoSw verifies receipts**: Calls /v1/verify — Commit `b9d1ccf`
 
-### P1 — SHOULD DO (makes VIN credible)
+### P1 — SHOULD DO ✅ ALL COMPLETE
 
-- [ ] **Real x402 verification**: Implement facilitator verify/settle
-  - Include payment_ref + payment_commitment in receipt
-  - Remove ?paid=true (keep behind VIN_TEST_MODE=1)
-
-- [ ] **Persistent node identity**: Save keys to disk
-  - VIN_KEY_PATH=./data/node.key
-  - Derive from seed or persist encrypted
-
-- [ ] **Fix README positioning**: 
-  - "Proof of Untampered AI Generation" not "prove not human"
-  - Keep "inverse captcha" as tagline only
+- [x] **Persistent node identity**: `d6ba678`
+- [x] **Fix README positioning**: `e8ebfa7`
+- [x] **x402 improvements**: Test mode gate + payment extraction `483ed20`
 
 ### P2 — NICE TO HAVE (makes VIN strong)
 
