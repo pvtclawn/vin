@@ -5,6 +5,7 @@
  */
 
 import { blastRound, computeScore } from './blaster';
+import { generateOrchestratorKeys, signScore, verifyScore } from './signer';
 import type { NodeConfig, ChallengeTask } from './types';
 
 const args = process.argv.slice(2);
@@ -82,3 +83,20 @@ console.log(`   Latency p50: ${score.signals.latency_p50_ms}ms`);
 console.log(`   Latency p90: ${score.signals.latency_p90_ms}ms`);
 console.log(`   Latency p99: ${score.signals.latency_p99_ms}ms`);
 console.log(`   Confidence: ${(score.confidence * 100).toFixed(1)}%`);
+
+// Sign the score
+console.log('');
+console.log('🔐 Signing score...');
+const keys = generateOrchestratorKeys();
+const signedScore = signScore(score, keys);
+console.log(`   Orchestrator pubkey: ${signedScore.orchestrator_pubkey.slice(0, 16)}...`);
+console.log(`   Signature: ${signedScore.sig.slice(0, 20)}...`);
+
+// Verify
+const valid = verifyScore(signedScore);
+console.log(`   Verified: ${valid ? '✅' : '❌'}`);
+
+// Output full signed score
+console.log('');
+console.log('📄 Signed Score JSON:');
+console.log(JSON.stringify(signedScore, null, 2));
