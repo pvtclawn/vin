@@ -91,3 +91,27 @@ describe('ReceiptV0', () => {
     expect(result2.reason).toBe('replay_detected');
   });
 });
+
+import canonicalize from 'canonicalize';
+
+describe('RFC 8785 Canonicalization', () => {
+  test('nested objects produce stable output', () => {
+    const obj1 = { b: 2, a: { d: 4, c: 3 } };
+    const obj2 = { a: { c: 3, d: 4 }, b: 2 };
+    
+    const json1 = canonicalize(obj1);
+    const json2 = canonicalize(obj2);
+    
+    // RFC 8785 should produce identical output regardless of input order
+    expect(json1).toBe(json2);
+    expect(json1).toBe('{"a":{"c":3,"d":4},"b":2}');
+  });
+  
+  test('arrays preserve order', () => {
+    const obj = { items: [3, 1, 2], name: "test" };
+    const json = canonicalize(obj);
+    
+    // Keys sorted, array order preserved
+    expect(json).toBe('{"items":[3,1,2],"name":"test"}');
+  });
+});

@@ -4,6 +4,7 @@
 
 import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
+import canonicalize from 'canonicalize';
 
 // Configure ed25519
 ed.hashes.sha512 = sha512;
@@ -24,7 +25,10 @@ function toBase64Url(bytes: Uint8Array): string {
 }
 
 function canonicalJson(obj: unknown): string {
-  return JSON.stringify(obj, Object.keys(obj as object).sort());
+  // RFC 8785 JSON Canonicalization Scheme (JCS)
+  const result = canonicalize(obj);
+  if (!result) throw new Error('Failed to canonicalize JSON');
+  return result;
 }
 
 /**

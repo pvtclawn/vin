@@ -6,6 +6,7 @@
 
 import * as ed from '@noble/ed25519';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import canonicalize from 'canonicalize';
 import type { 
   ActionRequestV0, 
   OutputV0, 
@@ -33,8 +34,10 @@ function fromBase64Url(str: string): Uint8Array {
 }
 
 function canonicalJson(obj: unknown): string {
-  // Simple canonical JSON: sorted keys, no whitespace
-  return JSON.stringify(obj, Object.keys(obj as object).sort());
+  // RFC 8785 JSON Canonicalization Scheme (JCS)
+  const result = canonicalize(obj);
+  if (!result) throw new Error('Failed to canonicalize JSON');
+  return result;
 }
 
 function hashJson(obj: unknown): string {
