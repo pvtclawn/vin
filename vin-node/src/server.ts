@@ -175,6 +175,7 @@ const server = Bun.serve({
           
           responsePayload = {
             encrypted_response: encrypted.ciphertext,
+            response_ephemeral_pubkey: encrypted.ephemeralPubkey,
             response_nonce: encrypted.nonce,
             receipt,
           };
