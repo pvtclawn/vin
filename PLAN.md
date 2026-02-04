@@ -1,61 +1,107 @@
 # VIN Project Plan
 
-## Current Status: Phase 4 COMPLETE ✅
-
-## Phase 0 — ReceiptV0 + /v1/verify ✅
-- [x] Define ReceiptV0 schema and canonical signing payload (ed25519)
-- [x] Implement /v1/generate returning (text, receipt)
-- [x] Implement /v1/verify that recomputes hashes + signature + nonce window
-- [x] Add tests: "edit 1 char → verify fails", "replay nonce → rejected"
-- [x] Push to GitHub: https://github.com/pvtclawn/vin
-- [x] Moltbook announcement thread
-- [x] Squat /m/vin submolt
-
-## Phase 1 — x402 Payment Gating ✅
-- [x] Add x402 middleware to /v1/generate
-- [x] Return 402 Payment Required with payment instructions
-- [x] Accept X-Payment header or ?paid=true (stub verification)
-- [ ] TODO: Integrate with actual x402 facilitator for real verification
-
-## Phase 2 — PoSw Orchestrator ✅
-- [x] posw-orchestrator/ directory
-- [x] Parallel challenge blast to K nodes
-- [x] Collect results with latency tracking
-- [x] Compute ScoreV0 JSON (completion_rate, latency p50/p90/p99)
-- [x] Sign score with orchestrator key (ed25519)
-- [ ] TODO: Optional anchor score hash on Base (EAS)
-
-## Phase 3 — dstack TEE Packaging ✅
-- [x] Dockerize vin-node (Dockerfile + docker-compose.yml)
-- [x] Add /v1/attestation endpoint (stub, returns 'none')
-- [x] Write RUN_A_NODE.md
-- [x] Test Docker build + run locally
-- [ ] Deploy to dstack CVM (requires TDX hardware)
-- [ ] Implement real attestation report from dstack SDK
-
-## Phase 4 — ERC-8004 Integration ✅
-- [x] Find/deploy ERC-8004 registry on Base Mainnet
-- [x] Create agent registration JSON
-- [x] Upload to IPFS: `bafybeiadrz4xv22vo4kdzvid5t6fbdi5bvjstfwalaho3quuowu3rttxyu`
-- [x] Register VIN node identity: **Agent ID 1391**
-- [ ] Add optional reputation feedback hook
-
-**TX**: `0x551631ab1b00b5506cfc4053509300426876a4b08cb141fce6a10cbf313fa9ac`
+## Current Status: Phase 4 COMPLETE ✅ (but with critical gaps per VIN_REVIEW_001)
 
 ---
 
-## Reference Docs (in docs/)
-- REF_X402.md — Payment protocol
-- REF_DSTACK.md — TEE framework
-- REF_ERC8004.md — Identity/reputation registry
+## Critical Review Summary (VIN_REVIEW_001)
 
-## Red Team Analysis
-- memory/challenges/2026-02-04--vin-receipts.md
-- 10 attack vectors analyzed
-- Key gaps: x402 bypass (Phase 1), key compromise (Phase 3)
+**What's working:**
+- ✅ Receipt primitive (ed25519, tamper-evident)
+- ✅ /v1/verify with tests (6 passing)
+- ✅ PoSw orchestrator exists
+- ✅ Docker packaging
+- ✅ ERC-8004 registration (Agent ID 1391)
+
+**What breaks the promise:**
+1. ❌ LLM call is stubbed (just echoes)
+2. ❌ x402 is bypassable flag (not real payment)
+3. ❌ Attestation stubbed (returns 'none')
+4. ❌ Canonical JSON not RFC 8785 (can break cross-impl)
+5. ❌ Replay protection in-memory only
+6. ❌ PoSw doesn't verify receipts (just checks sig exists)
+7. ⚠️ README claim too strong ("prove not human")
+8. ❌ Keys regenerate on boot (breaks identity)
+
+---
+
+## Priority Tasks (from review)
+
+### P0 — MUST DO (makes VIN meaningful)
+
+- [ ] **Real LLM inference**: Implement Anthropic adapter
+  - VIN_LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY
+  - Wire into generateOutput()
+  - Add mock tests (no network in unit tests)
+
+- [ ] **PoSw must verify receipts**: Orchestrator calls /v1/verify or implements locally
+  - Currently just checks "sig exists"
+  - Score should include receipt_valid_rate from real verification
+
+- [ ] **RFC 8785 canonicalization**: Replace JSON.stringify sort hack
+  - Add `canonicalize` dependency
+  - Add cross-impl test vectors
+  - Apply everywhere (node + orchestrator)
+
+### P1 — SHOULD DO (makes VIN credible)
+
+- [ ] **Real x402 verification**: Implement facilitator verify/settle
+  - Include payment_ref + payment_commitment in receipt
+  - Remove ?paid=true (keep behind VIN_TEST_MODE=1)
+
+- [ ] **Persistent node identity**: Save keys to disk
+  - VIN_KEY_PATH=./data/node.key
+  - Derive from seed or persist encrypted
+
+- [ ] **Fix README positioning**: 
+  - "Proof of Untampered AI Generation" not "prove not human"
+  - Keep "inverse captcha" as tagline only
+
+### P2 — NICE TO HAVE (makes VIN strong)
+
+- [ ] **dstack attestation for real**: Deploy to TDX, return real report
+  - Bind report_hash into receipt
+  - Update verifier to optionally require attestation
+
+- [ ] **Encypher layer**: Invisible manifest embedding
+  - ENCYPHER_ENABLE=1 path
+  - Survivability matrix testing
+
+- [ ] **Persistent replay cache**: sqlite/leveldb instead of in-memory
+
+---
+
+## Completed Phases
+
+### Phase 0 — ReceiptV0 + /v1/verify ✅
+- [x] ReceiptV0 schema, ed25519 signing, tests
+
+### Phase 1 — x402 Payment Gating ✅ (stub)
+- [x] 402 response + X-Payment header check
+- [ ] TODO: Real facilitator integration (P1)
+
+### Phase 2 — PoSw Orchestrator ✅ (needs fix)
+- [x] Parallel blast + latency tracking
+- [ ] TODO: Real receipt verification (P0)
+
+### Phase 3 — Docker + TEE Prep ✅
+- [x] Dockerfile, docker-compose, tested
+- [ ] TODO: Real dstack deployment (P2)
+
+### Phase 4 — ERC-8004 ✅
+- [x] Agent ID 1391 registered
+- [x] IPFS: bafybeiadrz4xv22vo4kdzvid5t6fbdi5bvjstfwalaho3quuowu3rttxyu
+
+---
 
 ## NEXT TASK
-Complete remaining items: real x402 facilitator, dstack TEE deployment, reputation hooks
+**P0: Implement RFC 8785 canonicalization** (smallest P0, unblocks others)
 
 ---
+
+## Reference Docs
+- docs/VIN_REVIEW_001.txt — Critical review with all findings
+- docs/VIN_PROTOCOL.md — Updated protocol spec
+- docs/REF_X402.md, REF_DSTACK.md, REF_ERC8004.md
+
 *Last updated: 2026-02-04*
