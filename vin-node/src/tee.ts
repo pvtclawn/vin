@@ -4,9 +4,10 @@
  * Integrates with dstack SDK for TEE attestation reports.
  * When running in a dstack CVM, provides real TDX attestation.
  * Otherwise returns a stub response.
+ * 
+ * Note: dstack SDK is imported lazily to avoid missing dependency errors
+ * when running outside TEE environment.
  */
-
-import { TappdClient } from '@phala/dstack-sdk';
 
 export interface AttestationInfo {
   type: string;
@@ -17,13 +18,19 @@ export interface AttestationInfo {
 }
 
 // Singleton client (lazy init)
-let tappdClient: TappdClient | null = null;
+let tappdClient: unknown = null;
 
-function getClient(): TappdClient {
+async function getClient(): Promise<unknown> {
   if (!tappdClient) {
-    // Default endpoint for dstack guest agent
-    const endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT || 'http://localhost:8090';
-    tappdClient = new TappdClient(endpoint);
+    try {
+      // Dynamic import to avoid loading dstack SDK when not in TEE
+      const { TappdClient } = await import('@phala/dstack-sdk');
+      const endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT || 'http://localhost:8090';
+      tappdClient = new TappdClient(endpoint);
+    } catch (error) {
+      console.log('[TEE] dstack SDK not available:', (error as Error).message);
+      return null;
+    }
   }
   return tappdClient;
 }
@@ -33,7 +40,8 @@ function getClient(): TappdClient {
  */
 export async function isTeeAvailable(): Promise<boolean> {
   try {
-    const client = getClient();
+    const client = await getClient() as { tdxQuote: (data: string) => Promise<unknown> } | null;
+    if (!client) return false;
     const info = await client.tdxQuote('test');
     return !!info;
   } catch {
@@ -49,7 +57,10 @@ export async function getAttestation(
   nodePubkey?: string
 ): Promise<AttestationInfo> {
   try {
-    const client = getClient();
+    const client = await getClient() as { tdxQuote: (data: string) => Promise<{ rtmr0?: string } | null> } | null;
+    if (!client) {
+      return { type: 'none', available: false };
+    }
     
     // Generate TDX quote with report data
     const quote = await client.tdxQuote(reportData);
@@ -82,11 +93,13 @@ export async function getAttestation(
  */
 export async function deriveKey(path: string): Promise<Uint8Array | null> {
   try {
-    const client = getClient();
+    const client = await getClient() as { deriveKey: (a: string, b: string) => Promise<{ key?: string } | null> } | null;
+    if (!client) return null;
+    
     const derived = await client.deriveKey(path, path);
     
     if (derived?.key) {
-      // Take first 32 bytes for ed25519 seed
+      // Take first 32 bytes for secp256k1 seed
       return new Uint8Array(Buffer.from(derived.key, 'hex').slice(0, 32));
     }
     return null;

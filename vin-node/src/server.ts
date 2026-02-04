@@ -124,7 +124,6 @@ const server = Bun.serve({
             body.encrypted_payload,
             body.ephemeral_pubkey,
             body.nonce,
-            userPubkey,
             encKeys.secretKey
           );
           

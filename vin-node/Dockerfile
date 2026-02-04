@@ -1,12 +1,12 @@
-FROM oven/bun:1.1-alpine
+FROM oven/bun:latest
 
 WORKDIR /app
 
 # Copy package files
-COPY vin-node/package.json vin-node/bun.lock* ./
+COPY vin-node/package.json ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source
 COPY vin-node/src ./src
