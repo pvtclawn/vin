@@ -27,21 +27,11 @@
 
 ## Priority Tasks (from review)
 
-### P0 — MUST DO (makes VIN meaningful)
+### P0 — MUST DO ✅ ALL COMPLETE
 
-- [x] **RFC 8785 canonicalization**: ✅ Implemented in node + orchestrator
-  - Added `canonicalize` library (RFC 8785 JCS)
-  - 8 tests passing (2 new canonicalization tests)
-  - Commit: f1f1a65
-
-- [ ] **Real LLM inference**: Implement Anthropic adapter
-  - VIN_LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY
-  - Wire into generateOutput()
-  - Add mock tests (no network in unit tests)
-
-- [ ] **PoSw must verify receipts**: Orchestrator calls /v1/verify or implements locally
-  - Currently just checks "sig exists"
-  - Score should include receipt_valid_rate from real verification
+- [x] **RFC 8785 canonicalization**: Commit `f1f1a65`
+- [x] **Real LLM inference**: Anthropic adapter — Commit `9f7302c`
+- [x] **PoSw verifies receipts**: Calls /v1/verify — Commit `b9d1ccf`
 
 ### P1 — SHOULD DO (makes VIN credible)
 
