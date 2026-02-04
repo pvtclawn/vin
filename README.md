@@ -1,10 +1,26 @@
 # VIN: Verifiable Inference Network
 
-**Prove you're not a human.** (Inverse CAPTCHA)
+**Proof of Untampered AI Generation**
+
+> *"Inverse CAPTCHA"* — prove your output came from an AI pipeline, not hand-typed by a human.
 
 A decentralized network of verifiable inference nodes. x402 paid endpoints, ed25519 receipts, ERC-8004 identity, TEE attestation.
 
 **ERC-8004 Agent ID: 1391** on Base Mainnet
+
+## What VIN Proves
+
+- ✅ **Tamper-evidence**: output text matches what the node signed
+- ✅ **Pipeline integrity**: output flowed through a specific node implementation
+- ✅ **Environment integrity** (with TEE): signing key bound to measured runtime
+
+## What VIN Does NOT Prove
+
+- ❌ "No human ever influenced the prompt"
+- ❌ The model "truly reasoned" vs. retrieved/copied
+- ❌ A specific proprietary model was used (unless TEE + policy enforced)
+
+> **Honest claim**: "this text was produced and signed by an attested generation pipeline."
 
 ## Related Projects
 
