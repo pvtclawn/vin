@@ -1,11 +1,12 @@
 /**
- * VIN Node - HTTP Server
+ * VIN Node - HTTP Server (Confidential Proxy)
  * 
  * Endpoints:
  * - GET /health
+ * - GET /v1/tee-pubkey (TEE encryption pubkey + attestation)
  * - GET /v1/policies
  * - GET /v1/attestation
- * - POST /v1/generate (x402 gated)
+ * - POST /v1/generate (confidential proxy - encrypted payload)
  * - POST /v1/verify
  */
 
@@ -13,33 +14,28 @@ import { createReceipt, verifyReceipt } from './receipt';
 import { loadOrGenerateKeys, type NodeKeys } from './keys';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
 import { hasValidPayment, build402Response } from './x402';
-import { createProvider, type LLMProvider } from './llm';
 import { getAttestation } from './tee';
+import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey } from './crypto';
+import { callLLM, type LLMRequest } from './llm-proxy';
+import { deriveKey } from './tee';
 
 // Node configuration
 const PORT = process.env.VIN_PORT ?? 3402;
 const NODE_KEYS: NodeKeys = loadOrGenerateKeys();
-const LLM_PROVIDER: LLMProvider = createProvider();
 
-console.log('🔑 Node pubkey:', Buffer.from(NODE_KEYS.publicKey).toString('base64url').slice(0, 16) + '...');
-console.log('🤖 LLM provider:', process.env.VIN_LLM_PROVIDER || 'echo');
+// Initialize encryption keys (try TEE first)
+const teeSeed = await deriveKey('vin-encryption-v1');
+const ENC_KEYS = await getTeeEncryptionKeys(teeSeed);
+
+console.log('🔑 Node signing pubkey:', Buffer.from(NODE_KEYS.publicKey).toString('base64url').slice(0, 16) + '...');
+console.log('🔐 Encryption pubkey:', encodePublicKey(ENC_KEYS.publicKey).slice(0, 16) + '...');
 
 // Supported policies
 const POLICIES = [
   { policy_id: 'P0_COMPOSE_POST_V1', action_type: 'compose_post' },
   { policy_id: 'P1_CHALLENGE_RESP_V1', action_type: 'challenge_response' },
+  { policy_id: 'P2_CONFIDENTIAL_PROXY_V1', action_type: 'confidential_llm_call' },
 ];
-
-// Generate output using configured LLM provider
-async function generateOutput(request: ActionRequestV0): Promise<OutputV0> {
-  const response = await LLM_PROVIDER.generate(request);
-  return {
-    schema: 'vin.output.v0',
-    format: 'plain',
-    text: response.text,
-    clean_text: response.text,
-  };
-}
 
 const server = Bun.serve({
   port: PORT,
@@ -50,17 +46,37 @@ const server = Bun.serve({
     
     // CORS headers
     const headers = {
-      'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Payment',
     };
+    
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers });
+    }
     
     // Health check
     if (path === '/health' && req.method === 'GET') {
+      const encKeys = ENC_KEYS;
       return Response.json({
         ok: true,
         node_pubkey: Buffer.from(NODE_KEYS.publicKey).toString('base64url'),
-        version: '0.1',
+        encryption_pubkey: encodePublicKey(encKeys.publicKey),
+        version: '0.2',
         x402: true,
+        confidential_proxy: true,
+      }, { headers });
+    }
+    
+    // TEE pubkey for encryption
+    if (path === '/v1/tee-pubkey' && req.method === 'GET') {
+      const encKeys = ENC_KEYS;
+      const attestation = await getAttestation('vin-encryption-pubkey', encodePublicKey(encKeys.publicKey));
+      
+      return Response.json({
+        encryption_pubkey: encodePublicKey(encKeys.publicKey),
+        signing_pubkey: Buffer.from(NODE_KEYS.publicKey).toString('base64url'),
+        attestation,
       }, { headers });
     }
     
@@ -69,14 +85,14 @@ const server = Bun.serve({
       return Response.json({ policies: POLICIES }, { headers });
     }
     
-    // Attestation (real TEE when available)
+    // Attestation
     if (path === '/v1/attestation' && req.method === 'GET') {
       const nodePubkey = Buffer.from(NODE_KEYS.publicKey).toString('base64url');
       const attestation = await getAttestation('vin-node-attestation', nodePubkey);
       return Response.json(attestation, { headers });
     }
     
-    // Generate (x402 gated)
+    // Generate (confidential proxy)
     if (path === '/v1/generate' && req.method === 'POST') {
       // Check payment
       if (!hasValidPayment(req)) {
@@ -84,57 +100,124 @@ const server = Bun.serve({
       }
       
       try {
-        const request = await req.json() as ActionRequestV0;
-        
-        // Validate schema
-        if (request.schema !== 'vin.action_request.v0') {
-          return Response.json({ error: 'invalid_request', message: 'Invalid schema' }, { status: 400, headers });
-        }
-        
-        // Check policy support
-        const policySupported = POLICIES.some(p => p.policy_id === request.policy_id);
-        if (!policySupported) {
-          return Response.json({ error: 'policy_not_supported', message: `Unknown policy: ${request.policy_id}` }, { status: 403, headers });
-        }
-        
-        // Generate output
-        const output = await generateOutput(request);
-        
-        // Create receipt
-        const receipt = createReceipt(request, output, NODE_KEYS);
-        
-        const response: GenerateResponse = {
-          output,
-          receipt,
-          proof_bundle: {
-            attestation_report: null,
-            encypher: { enabled: false },
-          },
+        const body = await req.json() as {
+          // New confidential mode
+          encrypted_payload?: string;
+          nonce?: string;
+          user_pubkey?: string;
+          // Legacy mode (for testing)
+          request?: ActionRequestV0;
         };
         
-        return Response.json(response, { headers });
+        const encKeys = ENC_KEYS;
+        let llmRequest: LLMRequest;
+        let userPubkey: Uint8Array | null = null;
+        let isConfidential = false;
+        
+        if (body.encrypted_payload && body.nonce && body.user_pubkey) {
+          // Confidential proxy mode
+          isConfidential = true;
+          userPubkey = parsePublicKey(body.user_pubkey);
+          
+          const decrypted = decrypt(
+            body.encrypted_payload,
+            body.nonce,
+            userPubkey,
+            encKeys.secretKey
+          );
+          
+          llmRequest = JSON.parse(decrypted) as LLMRequest;
+          console.log('[proxy] Confidential mode - calling', llmRequest.provider_url);
+        } else if (body.request) {
+          // Legacy mode (for testing without encryption)
+          console.warn('[proxy] Legacy mode - no encryption');
+          llmRequest = {
+            provider_url: process.env.VIN_LLM_URL || 'https://api.anthropic.com/v1/messages',
+            api_key: process.env.ANTHROPIC_API_KEY || '',
+            model: 'claude-3-haiku-20240307',
+            messages: [{ role: 'user', content: body.request.prompt }],
+          };
+        } else {
+          return Response.json({ error: 'Missing encrypted_payload or request' }, { status: 400, headers });
+        }
+        
+        // Call LLM
+        const llmResponse = await callLLM(llmRequest);
+        
+        // Create output
+        const output: OutputV0 = {
+          schema: 'vin.output.v0',
+          format: 'plain',
+          text: llmResponse.text,
+          clean_text: llmResponse.text,
+        };
+        
+        // Build request object for receipt
+        const actionRequest: ActionRequestV0 = {
+          schema: 'vin.action_request.v0',
+          policy_id: isConfidential ? 'P2_CONFIDENTIAL_PROXY_V1' : 'P0_COMPOSE_POST_V1',
+          action_type: isConfidential ? 'confidential_llm_call' : 'compose_post',
+          prompt: isConfidential ? '[encrypted]' : (body.request?.prompt || ''),
+          context: {},
+        };
+        
+        // Create receipt
+        const receipt = createReceipt(actionRequest, output, NODE_KEYS);
+        
+        // Prepare response
+        let responsePayload: GenerateResponse;
+        
+        if (isConfidential && userPubkey) {
+          // Encrypt response for user
+          const encrypted = encrypt(
+            { text: llmResponse.text, usage: llmResponse.usage },
+            userPubkey,
+            encKeys.secretKey
+          );
+          
+          responsePayload = {
+            encrypted_response: encrypted.ciphertext,
+            response_nonce: encrypted.nonce,
+            receipt,
+          } as GenerateResponse;
+        } else {
+          responsePayload = { output, receipt };
+        }
+        
+        return Response.json(responsePayload, { headers });
         
       } catch (error) {
-        return Response.json({ error: 'generation_failed', message: String(error) }, { status: 500, headers });
+        console.error('[generate] Error:', error);
+        return Response.json({
+          error: 'generation_failed',
+          message: (error as Error).message,
+        }, { status: 500, headers });
       }
     }
     
-    // Verify (free)
+    // Verify receipt
     if (path === '/v1/verify' && req.method === 'POST') {
       try {
         const body = await req.json() as VerifyRequest;
-        const result = verifyReceipt(body.request, body.output, body.receipt);
-        return Response.json(result, { headers });
+        const result = verifyReceipt(body.receipt, body.output);
         
+        const response: VerifyResponse = {
+          valid: result.valid,
+          checks: result.checks,
+          error: result.error,
+        };
+        
+        return Response.json(response, { headers });
       } catch (error) {
-        return Response.json({ valid: false, reason: `parse_error: ${error}` }, { headers });
+        return Response.json({
+          valid: false,
+          error: (error as Error).message,
+        }, { status: 400, headers });
       }
     }
     
-    // 404
-    return Response.json({ error: 'not_found' }, { status: 404, headers });
+    return Response.json({ error: 'Not found' }, { status: 404, headers });
   },
 });
 
-console.log(`🚀 VIN Node running on http://localhost:${server.port}`);
-console.log('Endpoints: /health, /v1/policies, /v1/generate (x402), /v1/verify');
+console.log(`🚀 VIN Node (Confidential Proxy) running on http://localhost:${PORT}`);
