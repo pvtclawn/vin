@@ -4,6 +4,7 @@
  * Endpoints:
  * - GET /health
  * - GET /v1/policies
+ * - GET /v1/attestation
  * - POST /v1/generate (x402 gated)
  * - POST /v1/verify
  */
@@ -11,12 +12,15 @@
 import { generateNodeKeys, createReceipt, verifyReceipt, type NodeKeys } from './receipt';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
 import { hasValidPayment, build402Response } from './x402';
+import { createProvider, type LLMProvider } from './llm';
 
 // Node configuration
 const PORT = process.env.VIN_PORT ?? 3402;
 const NODE_KEYS: NodeKeys = generateNodeKeys();
+const LLM_PROVIDER: LLMProvider = createProvider();
 
 console.log('🔑 Node pubkey:', Buffer.from(NODE_KEYS.publicKey).toString('base64url').slice(0, 16) + '...');
+console.log('🤖 LLM provider:', process.env.VIN_LLM_PROVIDER || 'echo');
 
 // Supported policies
 const POLICIES = [
@@ -24,15 +28,14 @@ const POLICIES = [
   { policy_id: 'P1_CHALLENGE_RESP_V1', action_type: 'challenge_response' },
 ];
 
-// Stub LLM call (replace with real provider later)
+// Generate output using configured LLM provider
 async function generateOutput(request: ActionRequestV0): Promise<OutputV0> {
-  // For MVP, just echo a stub response
-  const text = `[VIN Node] Processed request ${request.request_id} with policy ${request.policy_id}`;
+  const response = await LLM_PROVIDER.generate(request);
   return {
     schema: 'vin.output.v0',
     format: 'plain',
-    text,
-    clean_text: text,
+    text: response.text,
+    clean_text: response.text,
   };
 }
 
