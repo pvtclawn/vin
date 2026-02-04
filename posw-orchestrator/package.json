@@ -1,0 +1,20 @@
+{
+  "name": "posw-orchestrator",
+  "version": "0.1.0",
+  "description": "Proof-of-Swarm Orchestrator - parallel challenge blaster + scorer",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "blast": "bun run src/blast.ts"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^3.0.0",
+    "@noble/hashes": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
