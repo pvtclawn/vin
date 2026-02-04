@@ -9,6 +9,31 @@ import type { NodeConfig, ChallengeTask, NodeResult, PoSwScoreV0 } from './types
 const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
+ * Verify a receipt by calling the node's /v1/verify endpoint
+ */
+async function verifyReceipt(
+  nodeEndpoint: string,
+  request: unknown,
+  output: unknown,
+  receipt: unknown
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${nodeEndpoint}/v1/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request, output, receipt }),
+    });
+    
+    if (!response.ok) return false;
+    
+    const result = await response.json() as { valid: boolean };
+    return result.valid === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Send a challenge to a single node
  */
 async function challengeNode(
@@ -17,6 +42,16 @@ async function challengeNode(
   paymentHeader?: string
 ): Promise<NodeResult> {
   const start = performance.now();
+  
+  // Build request object for verification
+  const request = {
+    schema: 'vin.action_request.v0',
+    request_id: `${task.task_id}-${node.id}`,
+    action_type: task.action_type,
+    policy_id: task.policy_id,
+    inputs: task.inputs,
+    constraints: task.constraints,
+  };
   
   try {
     const headers: Record<string, string> = {
@@ -34,14 +69,7 @@ async function challengeNode(
     const response = await fetch(`${node.endpoint}/v1/generate`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        schema: 'vin.action_request.v0',
-        request_id: `${task.task_id}-${node.id}`,
-        action_type: task.action_type,
-        policy_id: task.policy_id,
-        inputs: task.inputs,
-        constraints: task.constraints,
-      }),
+      body: JSON.stringify(request),
       signal: controller.signal,
     });
     
@@ -70,17 +98,20 @@ async function challengeNode(
       };
     }
     
-    const data = await response.json();
+    const data = await response.json() as { output?: unknown; receipt?: unknown };
     
-    // Verify receipt exists
-    const hasReceipt = data.receipt && data.receipt.sig;
+    // Actually verify the receipt (not just check it exists)
+    let receiptValid = false;
+    if (data.output && data.receipt) {
+      receiptValid = await verifyReceipt(node.endpoint, request, data.output, data.receipt);
+    }
     
     return {
       node_id: node.id,
       task_id: task.task_id,
       success: true,
       latency_ms,
-      receipt_valid: hasReceipt,
+      receipt_valid: receiptValid,
     };
     
   } catch (error) {
