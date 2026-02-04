@@ -1,6 +1,6 @@
 # VIN Project Plan
 
-## Current Status: Phase 3 COMPLETE ✅
+## Current Status: Phase 4 COMPLETE ✅
 
 ## Phase 0 — ReceiptV0 + /v1/verify ✅
 - [x] Define ReceiptV0 schema and canonical signing payload (ed25519)
@@ -33,12 +33,14 @@
 - [ ] Deploy to dstack CVM (requires TDX hardware)
 - [ ] Implement real attestation report from dstack SDK
 
-## Phase 4 — ERC-8004 Integration (NEXT)
-- [ ] Find/deploy ERC-8004 registry on Base Mainnet
-- [ ] Create agent registration JSON
-- [ ] Upload to IPFS
-- [ ] Register VIN node identity
+## Phase 4 — ERC-8004 Integration ✅
+- [x] Find/deploy ERC-8004 registry on Base Mainnet
+- [x] Create agent registration JSON
+- [x] Upload to IPFS: `bafybeiadrz4xv22vo4kdzvid5t6fbdi5bvjstfwalaho3quuowu3rttxyu`
+- [x] Register VIN node identity: **Agent ID 1391**
 - [ ] Add optional reputation feedback hook
+
+**TX**: `0x551631ab1b00b5506cfc4053509300426876a4b08cb141fce6a10cbf313fa9ac`
 
 ---
 
@@ -53,7 +55,7 @@
 - Key gaps: x402 bypass (Phase 1), key compromise (Phase 3)
 
 ## NEXT TASK
-Research ERC-8004 registry deployments on Base Mainnet
+Complete remaining items: real x402 facilitator, dstack TEE deployment, reputation hooks
 
 ---
 *Last updated: 2026-02-04*
