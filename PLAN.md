@@ -28,10 +28,10 @@
 ## Phase 3 — dstack TEE Packaging (IN PROGRESS)
 - [x] Dockerize vin-node (Dockerfile + docker-compose.yml)
 - [x] Add /v1/attestation endpoint (stub, returns 'none')
-- [ ] Test Docker build locally
+- [x] Write RUN_A_NODE.md
+- [ ] Test Docker build locally (needs host access)
 - [ ] Deploy to dstack CVM
 - [ ] Implement real attestation report from dstack SDK
-- [ ] Write RUN_A_NODE.md
 
 ## Phase 4 — ERC-8004 Integration
 - [ ] Register node as ERC-8004 agent identity
