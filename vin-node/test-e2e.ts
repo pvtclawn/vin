@@ -1,5 +1,5 @@
 import * as secp from '@noble/secp256k1';
-import { encrypt, parsePublicKey } from './src/crypto';
+import { encrypt, parsePublicKey } from './src/services/crypto';
 
 // Get TEE pubkey from server
 const health = await fetch('http://localhost:3402/health').then(r => r.json()) as any;
