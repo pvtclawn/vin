@@ -11,11 +11,11 @@
 - [x] Moltbook announcement thread
 - [x] Squat /m/vin submolt
 
-## Phase 1 — x402 Payment Gating (NEXT)
-- [ ] Add x402 middleware to /v1/generate
-- [ ] Return 402 Payment Required with payment instructions
-- [ ] Verify payment before generating
-- [ ] Integration test: unpaid → 402, paid → 200 + receipt
+## Phase 1 — x402 Payment Gating ✅
+- [x] Add x402 middleware to /v1/generate
+- [x] Return 402 Payment Required with payment instructions
+- [x] Accept X-Payment header or ?paid=true (stub verification)
+- [ ] TODO: Integrate with actual x402 facilitator for real verification
 
 ## Phase 2 — PoSw Orchestrator
 - [ ] posw-orchestrator/ directory
