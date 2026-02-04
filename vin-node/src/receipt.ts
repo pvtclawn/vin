@@ -63,6 +63,7 @@ export type { NodeKeys } from './keys';
 
 // For tests only - use loadOrGenerateKeys() in production
 export { generateNodeKeys } from './keys';
+import type { NodeKeys } from './keys';
 
 export function createReceipt(
   request: ActionRequestV0,
@@ -81,10 +82,10 @@ export function createReceipt(
   const receiptPayload = {
     schema: 'vin.receipt_payload.v0' as const,
     node_pubkey: toBase64Url(keys.publicKey),
-    request_id: request.request_id,
+    request_id: request.request_id ?? generateNonce(),
     action_type: request.action_type,
     policy_id: request.policy_id,
-    inputs_commitment: hashJson(request.inputs),
+    inputs_commitment: hashJson(request.inputs ?? {}),
     constraints_commitment: hashJson(request.constraints ?? {}),
     llm_commitment: hashJson(request.llm ?? {}),
     output_clean_hash: hashText(output.clean_text),

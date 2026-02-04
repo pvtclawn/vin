@@ -8,12 +8,14 @@
 
 export interface ActionRequestV0 {
   schema: 'vin.action_request.v0';
-  request_id: string;
-  action_type: 'compose_post' | 'challenge_response' | 'generic';
+  request_id?: string;
+  action_type: 'compose_post' | 'challenge_response' | 'generic' | 'confidential_llm_call';
   policy_id: string;
-  inputs: Record<string, unknown>;
+  prompt?: string;  // For simple requests
+  inputs?: Record<string, unknown>;
   constraints?: {
     max_chars?: number;
+    max_tokens?: number;
     language?: string;
     style_tags?: string[];
   };
@@ -79,7 +81,7 @@ export interface ReceiptV0 {
 // ============ Verification Types ============
 
 export interface VerifyRequest {
-  request: ActionRequestV0;
+  request?: ActionRequestV0;
   output: OutputV0;
   receipt: ReceiptV0;
 }
@@ -87,13 +89,17 @@ export interface VerifyRequest {
 export interface VerifyResponse {
   valid: boolean;
   reason?: string;
+  checks?: Record<string, boolean>;
+  error?: string;
 }
 
 // ============ Generate Response ============
 
 export interface GenerateResponse {
-  output: OutputV0;
+  output?: OutputV0;
   receipt: ReceiptV0;
+  encrypted_response?: string;
+  response_nonce?: string;
   proof_bundle?: {
     attestation_report?: string;
     encypher?: {

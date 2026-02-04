@@ -29,7 +29,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async generate(request: ActionRequestV0): Promise<LLMResponse> {
-    const prompt = request.inputs.prompt || '';
+    const prompt = (request.prompt || request.inputs?.prompt || '') as string;
     const maxTokens = request.constraints?.max_tokens || 1024;
 
     const response = await this.client.messages.create({
@@ -55,7 +55,7 @@ export class AnthropicProvider implements LLMProvider {
 
 export class EchoProvider implements LLMProvider {
   async generate(request: ActionRequestV0): Promise<LLMResponse> {
-    const prompt = request.inputs.prompt || '';
+    const prompt = (request.prompt || request.inputs?.prompt || '') as string;
     return {
       text: `[VIN Node] Processed request: ${prompt.slice(0, 100)}...`,
       model: 'echo',

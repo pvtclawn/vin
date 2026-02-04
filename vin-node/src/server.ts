@@ -136,7 +136,7 @@ const server = Bun.serve({
             provider_url: process.env.VIN_LLM_URL || 'https://api.anthropic.com/v1/messages',
             api_key: process.env.ANTHROPIC_API_KEY || '',
             model: 'claude-3-haiku-20240307',
-            messages: [{ role: 'user', content: body.request.prompt }],
+            messages: [{ role: 'user', content: body.request.prompt || '' }],
           };
         } else {
           return Response.json({ error: 'Missing encrypted_payload or request' }, { status: 400, headers });
@@ -159,7 +159,6 @@ const server = Bun.serve({
           policy_id: isConfidential ? 'P2_CONFIDENTIAL_PROXY_V1' : 'P0_COMPOSE_POST_V1',
           action_type: isConfidential ? 'confidential_llm_call' : 'compose_post',
           prompt: isConfidential ? '[encrypted]' : (body.request?.prompt || ''),
-          context: {},
         };
         
         // Create receipt
@@ -172,15 +171,14 @@ const server = Bun.serve({
           // Encrypt response for user
           const encrypted = encrypt(
             { text: llmResponse.text, usage: llmResponse.usage },
-            userPubkey,
-            encKeys.secretKey
+            userPubkey
           );
           
           responsePayload = {
             encrypted_response: encrypted.ciphertext,
             response_nonce: encrypted.nonce,
             receipt,
-          } as GenerateResponse;
+          };
         } else {
           responsePayload = { output, receipt };
         }
@@ -200,7 +198,7 @@ const server = Bun.serve({
     if (path === '/v1/verify' && req.method === 'POST') {
       try {
         const body = await req.json() as VerifyRequest;
-        const result = verifyReceipt(body.receipt, body.output);
+        const result = verifyReceipt(body.request ?? {} as ActionRequestV0, body.output, body.receipt);
         
         const response: VerifyResponse = {
           valid: result.valid,
