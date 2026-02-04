@@ -39,11 +39,12 @@
 - [x] **Fix README positioning**: `e8ebfa7`
 - [x] **x402 improvements**: Test mode gate + payment extraction `483ed20`
 
-### P2 — NICE TO HAVE (makes VIN strong)
+### P2 — NICE TO HAVE (in progress)
 
-- [ ] **dstack attestation for real**: Deploy to TDX, return real report
-  - Bind report_hash into receipt
-  - Update verifier to optionally require attestation
+- [x] **dstack TEE integration**: `28c1ff7`
+  - Added @phala/dstack-sdk
+  - Real TDX attestation when deployed to CVM
+  - Graceful fallback when not in TEE
 
 - [ ] **Encypher layer**: Invisible manifest embedding
   - ENCYPHER_ENABLE=1 path
