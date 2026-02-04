@@ -58,16 +58,11 @@ function generateNonce(): string {
 
 // ============ Receipt Creation ============
 
-export interface NodeKeys {
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
-}
+// Re-export NodeKeys type from keys module
+export type { NodeKeys } from './keys';
 
-export function generateNodeKeys(): NodeKeys {
-  const privateKey = crypto.getRandomValues(new Uint8Array(32));
-  const publicKey = ed.getPublicKey(privateKey);
-  return { privateKey, publicKey };
-}
+// For tests only - use loadOrGenerateKeys() in production
+export { generateNodeKeys } from './keys';
 
 export function createReceipt(
   request: ActionRequestV0,

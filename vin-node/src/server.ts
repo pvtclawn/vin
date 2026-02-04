@@ -9,14 +9,15 @@
  * - POST /v1/verify
  */
 
-import { generateNodeKeys, createReceipt, verifyReceipt, type NodeKeys } from './receipt';
+import { createReceipt, verifyReceipt } from './receipt';
+import { loadOrGenerateKeys, type NodeKeys } from './keys';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
 import { hasValidPayment, build402Response } from './x402';
 import { createProvider, type LLMProvider } from './llm';
 
 // Node configuration
 const PORT = process.env.VIN_PORT ?? 3402;
-const NODE_KEYS: NodeKeys = generateNodeKeys();
+const NODE_KEYS: NodeKeys = loadOrGenerateKeys();
 const LLM_PROVIDER: LLMProvider = createProvider();
 
 console.log('🔑 Node pubkey:', Buffer.from(NODE_KEYS.publicKey).toString('base64url').slice(0, 16) + '...');

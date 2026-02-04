@@ -3,3 +3,6 @@ node_modules/
 
 # Internal chore papers
 .internal/
+
+# Node keys
+vin-node/data/
