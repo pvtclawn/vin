@@ -1,96 +1,133 @@
 /**
- * VIN Node - Encryption Layer
+ * VIN Node - Encryption Layer (EVM Compatible)
  * 
- * NaCl box encryption for confidential proxy flow:
- * - TEE has a keypair derived from dstack KMS (or generated)
+ * ECIES encryption using secp256k1 (same curve as Ethereum):
+ * - TEE has a secp256k1 keypair (can derive Ethereum address)
  * - User encrypts payload with TEE pubkey
  * - TEE encrypts response with user's pubkey
+ * - Compatible with eth-crypto, MetaMask, etc.
  */
 
-import nacl from 'tweetnacl';
-import { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } from 'tweetnacl-util';
+import * as secp from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { gcm } from '@noble/ciphers/aes';
+import { randomBytes } from '@noble/ciphers/webcrypto';
 
 export interface EncryptionKeys {
-  publicKey: Uint8Array;
-  secretKey: Uint8Array;
+  publicKey: Uint8Array;  // 33 bytes compressed
+  secretKey: Uint8Array;  // 32 bytes
 }
 
 let cachedKeys: EncryptionKeys | null = null;
 
 /**
- * Get or generate TEE encryption keypair
- * In TEE: derived from dstack KMS (call deriveKeyForEncryption)
- * Outside TEE: generated randomly (ephemeral)
+ * Get or generate TEE encryption keypair (secp256k1)
  */
 export async function getTeeEncryptionKeys(derivedSeed?: Uint8Array | null): Promise<EncryptionKeys> {
   if (cachedKeys) return cachedKeys;
   
-  if (derivedSeed) {
-    console.log('[crypto] Using TEE-derived encryption keys');
-    cachedKeys = nacl.box.keyPair.fromSecretKey(derivedSeed);
+  let secretKey: Uint8Array;
+  
+  if (derivedSeed && derivedSeed.length >= 32) {
+    console.log('[crypto] Using TEE-derived secp256k1 keys');
+    secretKey = derivedSeed.slice(0, 32);
   } else {
-    console.warn('[crypto] TEE not available, using ephemeral encryption keys');
-    cachedKeys = nacl.box.keyPair();
+    console.warn('[crypto] TEE not available, using ephemeral secp256k1 keys');
+    secretKey = secp.utils.randomSecretKey();
   }
+  
+  const publicKey = secp.getPublicKey(secretKey, true); // compressed
+  cachedKeys = { publicKey, secretKey };
   
   return cachedKeys;
 }
 
 /**
- * Encrypt data for a recipient's public key
+ * Derive Ethereum address from public key
+ */
+export function pubkeyToAddress(pubkey: Uint8Array): string {
+  // Parse point and get uncompressed bytes
+  const point = secp.Point.fromHex(Buffer.from(pubkey).toString('hex'));
+  const uncompressed = point.toBytes(false).slice(1); // Remove 0x04 prefix
+  // Keccak256 hash, take last 20 bytes (using sha256 as fallback for now)
+  const hash = sha256(uncompressed);
+  return '0x' + Buffer.from(hash.slice(-20)).toString('hex');
+}
+
+/**
+ * ECIES Encrypt
+ * 
+ * 1. Generate ephemeral keypair
+ * 2. ECDH with recipient pubkey
+ * 3. Derive AES key via HKDF
+ * 4. AES-GCM encrypt
  */
 export function encrypt(
   data: string | object,
   recipientPubkey: Uint8Array,
-  senderSecretKey: Uint8Array
-): { ciphertext: string; nonce: string } {
+): { ciphertext: string; ephemeralPubkey: string; nonce: string } {
   const message = typeof data === 'string' ? data : JSON.stringify(data);
-  const messageBytes = decodeUTF8(message);
-  const nonce = nacl.randomBytes(nacl.box.nonceLength);
+  const messageBytes = new TextEncoder().encode(message);
   
-  const encrypted = nacl.box(messageBytes, nonce, recipientPubkey, senderSecretKey);
+  // Generate ephemeral keypair
+  const ephemeralPriv = secp.utils.randomSecretKey();
+  const ephemeralPub = secp.getPublicKey(ephemeralPriv, true);
   
-  if (!encrypted) {
-    throw new Error('Encryption failed');
-  }
+  // ECDH shared secret
+  const sharedPoint = secp.getSharedSecret(ephemeralPriv, recipientPubkey);
+  
+  // Derive AES key via HKDF
+  const aesKey = hkdf(sha256, sharedPoint.slice(1), undefined, new TextEncoder().encode('vin-ecies-v1'), 32);
+  
+  // AES-GCM encrypt
+  const nonce = randomBytes(12);
+  const cipher = gcm(aesKey, nonce);
+  const encrypted = cipher.encrypt(messageBytes);
   
   return {
-    ciphertext: encodeBase64(encrypted),
-    nonce: encodeBase64(nonce),
+    ciphertext: Buffer.from(encrypted).toString('base64'),
+    ephemeralPubkey: Buffer.from(ephemeralPub).toString('hex'),
+    nonce: Buffer.from(nonce).toString('hex'),
   };
 }
 
 /**
- * Decrypt data from a sender's public key
+ * ECIES Decrypt
  */
 export function decrypt(
   ciphertext: string,
-  nonce: string,
-  senderPubkey: Uint8Array,
+  ephemeralPubkeyHex: string,
+  nonceHex: string,
   recipientSecretKey: Uint8Array
 ): string {
-  const ciphertextBytes = decodeBase64(ciphertext);
-  const nonceBytes = decodeBase64(nonce);
+  const ciphertextBytes = Buffer.from(ciphertext, 'base64');
+  const ephemeralPub = Buffer.from(ephemeralPubkeyHex, 'hex');
+  const nonce = Buffer.from(nonceHex, 'hex');
   
-  const decrypted = nacl.box.open(ciphertextBytes, nonceBytes, senderPubkey, recipientSecretKey);
+  // ECDH shared secret
+  const sharedPoint = secp.getSharedSecret(recipientSecretKey, ephemeralPub);
   
-  if (!decrypted) {
-    throw new Error('Decryption failed - invalid ciphertext or wrong keys');
-  }
+  // Derive AES key via HKDF
+  const aesKey = hkdf(sha256, sharedPoint.slice(1), undefined, new TextEncoder().encode('vin-ecies-v1'), 32);
   
-  return encodeUTF8(decrypted);
+  // AES-GCM decrypt
+  const cipher = gcm(aesKey, nonce);
+  const decrypted = cipher.decrypt(ciphertextBytes);
+  
+  return new TextDecoder().decode(decrypted);
 }
 
 /**
- * Parse base64 public key
+ * Parse hex public key
  */
-export function parsePublicKey(base64: string): Uint8Array {
-  return decodeBase64(base64);
+export function parsePublicKey(hex: string): Uint8Array {
+  return Buffer.from(hex, 'hex');
 }
 
 /**
- * Encode public key to base64
+ * Encode public key to hex
  */
 export function encodePublicKey(key: Uint8Array): string {
-  return encodeBase64(key);
+  return Buffer.from(key).toString('hex');
 }

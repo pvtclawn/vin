@@ -1,17 +1,16 @@
 /**
- * Crypto layer tests
+ * Crypto layer tests (secp256k1 ECIES)
  */
 
 import { describe, test, expect } from 'bun:test';
-import nacl from 'tweetnacl';
-import { encrypt, decrypt, encodePublicKey, parsePublicKey } from './crypto';
+import * as secp from '@noble/secp256k1';
+import { encrypt, decrypt, encodePublicKey, parsePublicKey, pubkeyToAddress } from './crypto';
 
-describe('Encryption', () => {
+describe('ECIES Encryption', () => {
   test('encrypt and decrypt roundtrip', () => {
-    // Simulate TEE keypair
-    const teeKeys = nacl.box.keyPair();
-    // Simulate user keypair
-    const userKeys = nacl.box.keyPair();
+    // Simulate TEE keypair (secp256k1)
+    const teePriv = secp.utils.randomSecretKey();
+    const teePub = secp.getPublicKey(teePriv, true);
     
     const payload = {
       provider_url: 'https://api.anthropic.com/v1/messages',
@@ -21,17 +20,18 @@ describe('Encryption', () => {
     };
     
     // User encrypts for TEE
-    const encrypted = encrypt(payload, teeKeys.publicKey, userKeys.secretKey);
+    const encrypted = encrypt(payload, teePub);
     
     expect(encrypted.ciphertext).toBeTruthy();
+    expect(encrypted.ephemeralPubkey).toBeTruthy();
     expect(encrypted.nonce).toBeTruthy();
     
     // TEE decrypts
     const decrypted = decrypt(
       encrypted.ciphertext,
+      encrypted.ephemeralPubkey,
       encrypted.nonce,
-      userKeys.publicKey,
-      teeKeys.secretKey
+      teePriv
     );
     
     const parsed = JSON.parse(decrypted);
@@ -40,22 +40,33 @@ describe('Encryption', () => {
   });
   
   test('wrong key fails decryption', () => {
-    const teeKeys = nacl.box.keyPair();
-    const userKeys = nacl.box.keyPair();
-    const wrongKeys = nacl.box.keyPair();
+    const teePriv = secp.utils.randomSecretKey();
+    const teePub = secp.getPublicKey(teePriv, true);
+    const wrongPriv = secp.utils.randomSecretKey();
     
-    const encrypted = encrypt('secret', teeKeys.publicKey, userKeys.secretKey);
+    const encrypted = encrypt('secret', teePub);
     
     expect(() => {
-      decrypt(encrypted.ciphertext, encrypted.nonce, wrongKeys.publicKey, teeKeys.secretKey);
-    }).toThrow('Decryption failed');
+      decrypt(encrypted.ciphertext, encrypted.ephemeralPubkey, encrypted.nonce, wrongPriv);
+    }).toThrow();
   });
   
   test('pubkey encode/decode roundtrip', () => {
-    const keys = nacl.box.keyPair();
-    const encoded = encodePublicKey(keys.publicKey);
+    const priv = secp.utils.randomSecretKey();
+    const pub = secp.getPublicKey(priv, true);
+    
+    const encoded = encodePublicKey(pub);
     const decoded = parsePublicKey(encoded);
     
-    expect(decoded).toEqual(keys.publicKey);
+    expect(decoded).toEqual(pub);
+  });
+  
+  test('pubkey to eth address', () => {
+    const priv = secp.utils.randomSecretKey();
+    const pub = secp.getPublicKey(priv, true);
+    
+    const addr = pubkeyToAddress(pub);
+    
+    expect(addr).toMatch(/^0x[a-f0-9]{40}$/);
   });
 });

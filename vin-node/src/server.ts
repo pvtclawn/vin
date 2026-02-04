@@ -101,8 +101,9 @@ const server = Bun.serve({
       
       try {
         const body = await req.json() as {
-          // New confidential mode
+          // New confidential mode (ECIES)
           encrypted_payload?: string;
+          ephemeral_pubkey?: string;
           nonce?: string;
           user_pubkey?: string;
           // Legacy mode (for testing)
@@ -114,13 +115,14 @@ const server = Bun.serve({
         let userPubkey: Uint8Array | null = null;
         let isConfidential = false;
         
-        if (body.encrypted_payload && body.nonce && body.user_pubkey) {
-          // Confidential proxy mode
+        if (body.encrypted_payload && body.ephemeral_pubkey && body.nonce && body.user_pubkey) {
+          // Confidential proxy mode (ECIES)
           isConfidential = true;
           userPubkey = parsePublicKey(body.user_pubkey);
           
           const decrypted = decrypt(
             body.encrypted_payload,
+            body.ephemeral_pubkey,
             body.nonce,
             userPubkey,
             encKeys.secretKey
