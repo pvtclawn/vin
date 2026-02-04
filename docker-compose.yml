@@ -1,0 +1,21 @@
+# VIN Node - dstack TEE Deployment
+#
+# Deploy to dstack: dstack deploy docker-compose.yml
+# Or use Phala Cloud: https://cloud.phala.network
+
+services:
+  vin-node:
+    build: .
+    ports:
+      - "3402:3402"
+    environment:
+      - VIN_PORT=3402
+      - VIN_PAY_TO=${VIN_PAY_TO:-0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af}
+      - VIN_PRICE_USD=${VIN_PRICE_USD:-$0.001}
+      - VIN_NETWORK=${VIN_NETWORK:-eip155:8453}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3402/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped

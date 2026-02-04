@@ -64,6 +64,16 @@ const server = Bun.serve({
       return Response.json({ policies: POLICIES }, { headers });
     }
     
+    // Attestation (stub - returns 'none' until dstack deployed)
+    if (path === '/v1/attestation' && req.method === 'GET') {
+      return Response.json({
+        type: 'none',
+        measurement: null,
+        report: null,
+        note: 'TEE attestation available when deployed to dstack CVM',
+      }, { headers });
+    }
+    
     // Generate (x402 gated)
     if (path === '/v1/generate' && req.method === 'POST') {
       // Check payment
