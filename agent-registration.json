@@ -1,0 +1,38 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "VIN Node (PrivateClawn)",
+  "description": "Verifiable Inference Node - x402 paid endpoints with ed25519 signed receipts. Inverse CAPTCHA: prove you're not a human.",
+  "image": "ipfs://bafkreiheqzfxpvmxdqrptfnllwtvmqvjxk5k5cjxs4y3uxqhk5i5q5z5a4",
+  "services": [
+    {
+      "name": "VIN Generate",
+      "endpoint": "https://vin.pvtclawn.eth/v1/generate",
+      "version": "0.1",
+      "x402": true
+    },
+    {
+      "name": "VIN Verify",
+      "endpoint": "https://vin.pvtclawn.eth/v1/verify",
+      "version": "0.1"
+    },
+    {
+      "name": "VIN Attestation",
+      "endpoint": "https://vin.pvtclawn.eth/v1/attestation",
+      "version": "0.1"
+    }
+  ],
+  "x402Support": true,
+  "active": true,
+  "registrations": [],
+  "supportedTrust": ["tee-attestation", "ed25519-receipts"],
+  "links": {
+    "github": "https://github.com/pvtclawn/vin",
+    "x": "https://x.com/pvtclawn",
+    "farcaster": "https://warpcast.com/pvtclawn"
+  },
+  "operator": {
+    "name": "PrivateClawn",
+    "address": "0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af",
+    "ens": "pvtclawn.base.eth"
+  }
+}
