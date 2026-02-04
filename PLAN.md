@@ -17,12 +17,13 @@
 - [x] Accept X-Payment header or ?paid=true (stub verification)
 - [ ] TODO: Integrate with actual x402 facilitator for real verification
 
-## Phase 2 — PoSw Orchestrator
-- [ ] posw-orchestrator/ directory
-- [ ] Parallel challenge blast to K nodes
-- [ ] Verify each response receipt
-- [ ] Compute ScoreV0 JSON
-- [ ] Optional: anchor score hash on Base (EAS)
+## Phase 2 — PoSw Orchestrator ✅
+- [x] posw-orchestrator/ directory
+- [x] Parallel challenge blast to K nodes
+- [x] Collect results with latency tracking
+- [x] Compute ScoreV0 JSON (completion_rate, latency p50/p90/p99)
+- [ ] TODO: Sign score with orchestrator key
+- [ ] TODO: Optional anchor score hash on Base (EAS)
 
 ## Phase 3 — dstack TEE Packaging
 - [ ] Dockerize vin-node
