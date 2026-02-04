@@ -25,10 +25,12 @@
 - [x] Sign score with orchestrator key (ed25519)
 - [ ] TODO: Optional anchor score hash on Base (EAS)
 
-## Phase 3 — dstack TEE Packaging
-- [ ] Dockerize vin-node
-- [ ] Add /v1/attestation returning dstack report
-- [ ] Bind receipt to attestation hash
+## Phase 3 — dstack TEE Packaging (IN PROGRESS)
+- [x] Dockerize vin-node (Dockerfile + docker-compose.yml)
+- [x] Add /v1/attestation endpoint (stub, returns 'none')
+- [ ] Test Docker build locally
+- [ ] Deploy to dstack CVM
+- [ ] Implement real attestation report from dstack SDK
 - [ ] Write RUN_A_NODE.md
 
 ## Phase 4 — ERC-8004 Integration
