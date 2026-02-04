@@ -22,7 +22,7 @@
 - [x] Parallel challenge blast to K nodes
 - [x] Collect results with latency tracking
 - [x] Compute ScoreV0 JSON (completion_rate, latency p50/p90/p99)
-- [ ] TODO: Sign score with orchestrator key
+- [x] Sign score with orchestrator key (ed25519)
 - [ ] TODO: Optional anchor score hash on Base (EAS)
 
 ## Phase 3 — dstack TEE Packaging
@@ -49,7 +49,7 @@
 - Key gaps: x402 bypass (Phase 1), key compromise (Phase 3)
 
 ## NEXT TASK
-Add score signing to PoSw Orchestrator (from red-team findings)
+Start Phase 3: dstack TEE packaging (Dockerfile + /v1/attestation)
 
 ---
 *Last updated: 2026-02-04*
