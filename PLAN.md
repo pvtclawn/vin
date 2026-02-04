@@ -29,6 +29,11 @@
 
 ### P0 — MUST DO (makes VIN meaningful)
 
+- [x] **RFC 8785 canonicalization**: ✅ Implemented in node + orchestrator
+  - Added `canonicalize` library (RFC 8785 JCS)
+  - 8 tests passing (2 new canonicalization tests)
+  - Commit: f1f1a65
+
 - [ ] **Real LLM inference**: Implement Anthropic adapter
   - VIN_LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY
   - Wire into generateOutput()
@@ -37,11 +42,6 @@
 - [ ] **PoSw must verify receipts**: Orchestrator calls /v1/verify or implements locally
   - Currently just checks "sig exists"
   - Score should include receipt_valid_rate from real verification
-
-- [ ] **RFC 8785 canonicalization**: Replace JSON.stringify sort hack
-  - Add `canonicalize` dependency
-  - Add cross-impl test vectors
-  - Apply everywhere (node + orchestrator)
 
 ### P1 — SHOULD DO (makes VIN credible)
 
