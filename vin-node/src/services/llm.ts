@@ -5,7 +5,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { ActionRequestV0 } from './types';
+import type { ActionRequestV0 } from '../types/index';
 
 export interface LLMResponse {
   text: string;

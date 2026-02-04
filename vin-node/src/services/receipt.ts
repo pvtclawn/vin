@@ -12,7 +12,7 @@ import type {
   OutputV0, 
   ReceiptV0, 
   VerifyResponse 
-} from './types';
+} from '../types/index';
 
 // Configure ed25519 with sha512
 ed.hashes.sha512 = sha512;

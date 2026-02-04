@@ -10,17 +10,16 @@
  * - POST /v1/verify
  */
 
-import { createReceipt, verifyReceipt } from './receipt';
-import { loadOrGenerateKeys, type NodeKeys } from './keys';
-import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types';
-import { hasValidPayment, build402Response } from './x402';
-import { getAttestation } from './tee';
-import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey } from './crypto';
-import { callLLM, type LLMRequest } from './llm-proxy';
-import { deriveKey } from './tee';
+import { createReceipt, verifyReceipt } from './services/receipt';
+import { loadOrGenerateKeys, type NodeKeys } from './services/keys';
+import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types/index';
+import { hasValidPayment, build402Response } from './services/x402';
+import { getAttestation, deriveKey } from './services/tee';
+import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey } from './services/crypto';
+import { callLLM, type LLMRequest } from './services/llm-proxy';
+import { PORT, LLM_URL, ANTHROPIC_API_KEY, LLM_MODEL } from './config';
 
 // Node configuration
-const PORT = process.env.VIN_PORT ?? 3402;
 const NODE_KEYS: NodeKeys = loadOrGenerateKeys();
 
 // Initialize encryption keys (try TEE first)
@@ -133,9 +132,9 @@ const server = Bun.serve({
           // Legacy mode (for testing without encryption)
           console.warn('[proxy] Legacy mode - no encryption');
           llmRequest = {
-            provider_url: process.env.VIN_LLM_URL || 'https://api.anthropic.com/v1/messages',
-            api_key: process.env.ANTHROPIC_API_KEY || '',
-            model: 'claude-3-haiku-20240307',
+            provider_url: LLM_URL,
+            api_key: ANTHROPIC_API_KEY || '',
+            model: LLM_MODEL,
             messages: [{ role: 'user', content: body.request.prompt || '' }],
           };
         } else {

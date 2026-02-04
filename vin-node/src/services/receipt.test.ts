@@ -3,7 +3,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { generateNodeKeys, createReceipt, verifyReceipt } from './receipt';
-import type { ActionRequestV0, OutputV0 } from './types';
+import type { ActionRequestV0, OutputV0 } from '../types/index';
 
 describe('ReceiptV0', () => {
   const keys = generateNodeKeys();
