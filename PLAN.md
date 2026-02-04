@@ -49,7 +49,7 @@
 - Key gaps: x402 bypass (Phase 1), key compromise (Phase 3)
 
 ## NEXT TASK
-Implement x402 payment gating on /v1/generate
+Add score signing to PoSw Orchestrator (from red-team findings)
 
 ---
 *Last updated: 2026-02-04*
