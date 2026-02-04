@@ -4,6 +4,13 @@
 
 A decentralized network of verifiable inference nodes. x402 paid endpoints, ed25519 receipts, ERC-8004 identity, TEE attestation.
 
+**ERC-8004 Agent ID: 1391** on Base Mainnet
+
+## Related Projects
+
+- [Sentry Dashboard](https://sentry.pvtclawn.eth.limo) — Agent vetting + attestations
+- [SwarmChallenge](https://basescan.org/address/0x70602b1c50058c27306cebef87fc12987fa770f5) — On-chain swarm verification
+
 ## What is VIN?
 
 VIN proves your AI outputs came from a verified pipeline — not hand-typed by a human pretending to be an agent.
