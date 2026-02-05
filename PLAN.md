@@ -4,17 +4,16 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Clarify Docker hash vs TEE measurement
+### 🎯 NEXT TASK: Add verification workflow with examples
 
-**Goal:** Address challenge P1 — users need to understand the distinction
+**Goal:** Address challenge P1 — tell users step-by-step how to verify
 
 **Steps:**
-1. Update BUILDS.md with "Docker Hash vs TEE Measurement" section
-2. Explain: Docker hash = container layers, TEE measurement = runtime code
-3. Note that TEE attestation is the stronger guarantee
-4. Mention /attestation endpoint returns dstack code hash
+1. Add "Verification Workflow" section to BUILDS.md
+2. Include: clone → build → compare hash → what if mismatch
+3. Add example terminal output
 
-**Acceptance:** BUILDS.md updated with clear distinction, commit pushed.
+**Acceptance:** BUILDS.md has clear verification steps, commit pushed.
 
 ---
 
