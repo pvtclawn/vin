@@ -62,6 +62,35 @@ When running in dstack, the TEE provides hardware attestation that includes:
 
 See `docs/ARCHITECTURE.md` for TEE integration details.
 
+## Docker Hash vs TEE Measurement
+
+**Important distinction:**
+
+| Type | What it proves | Trust level |
+|------|----------------|-------------|
+| Docker image hash | Container layers match | Medium — operator could run different image |
+| TEE code measurement | Actual running code | High — hardware-enforced, can't be faked |
+
+**Docker image hash** (`sha256:d18f...`) proves you built the same container layers. But a malicious operator could build the correct image, then run a different one inside the TEE.
+
+**TEE code measurement** is computed by the CPU at runtime. It's a hash of the actual code executing inside the enclave. This cannot be faked without breaking the TEE hardware guarantees.
+
+### How to verify TEE attestation
+
+```bash
+# Get the TEE attestation from a running node
+curl https://vin-node.example/attestation
+
+# Response includes:
+# - code_hash: Hash of running code (TEE measurement)
+# - platform: TEE platform identity
+# - timestamp: When attestation was generated
+```
+
+Compare `code_hash` against expected values. If it matches, the node is running the verified code.
+
+**Bottom line:** Docker hashes are useful for reproducibility checks. TEE attestation is the stronger guarantee for runtime integrity.
+
 ---
 
 *Last updated: 2026-02-05*
