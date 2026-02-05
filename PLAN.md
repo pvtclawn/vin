@@ -6,7 +6,20 @@ VIN is now a **Confidential LLM Proxy** — users encrypt their API keys and pro
 
 ---
 
-## Today's Progress (2026-02-04)
+## Today's Progress (2026-02-05)
+
+### Trust Model Work
+- Added SECURITY.md documenting trust assumptions + limitations
+- Added P3 trust hardening tasks from challenge review
+- Fixed leaked API key (now uses env var)
+- Pushed 3 commits: 28a5c9b, f8d86ae, 67d1e66
+
+### Blocked
+- Real API key test — waiting for new OpenRouter key
+
+---
+
+## Yesterday's Progress (2026-02-04)
 
 ### Architecture Pivot
 - Shifted from "hardcoded LLM provider" to "confidential proxy"
