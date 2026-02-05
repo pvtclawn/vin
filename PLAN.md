@@ -4,19 +4,17 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Document reproducible build process
+### 🎯 NEXT TASK: Build container and publish first image hash
 
-**File:** `docs/BUILDS.md`
-**Goal:** Enable users to verify the TEE container matches published code
+**Goal:** Make BUILDS.md verification actually usable
 
-**Contents:**
-- Dockerfile reproducibility notes
-- How to build locally: `docker build -t vin-node .`
-- How to compute image hash: `docker inspect --format='{{.Id}}'`
-- Published image hashes for each release
-- Link to GitHub Actions workflow (when added)
+**Steps:**
+1. Build container with `docker build --no-cache -t vin-node:v0.1.0 .`
+2. Get hash: `docker inspect --format='{{.Id}}' vin-node:v0.1.0`
+3. Update BUILDS.md with real hash
+4. Commit and push
 
-**Acceptance:** BUILDS.md created, commit pushed.
+**Acceptance:** BUILDS.md has a real, verifiable image hash.
 
 ---
 
