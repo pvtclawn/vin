@@ -4,17 +4,17 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Build container and publish first image hash
+### 🎯 NEXT TASK: Clarify Docker hash vs TEE measurement
 
-**Goal:** Make BUILDS.md verification actually usable
+**Goal:** Address challenge P1 — users need to understand the distinction
 
 **Steps:**
-1. Build container with `docker build --no-cache -t vin-node:v0.1.0 .`
-2. Get hash: `docker inspect --format='{{.Id}}' vin-node:v0.1.0`
-3. Update BUILDS.md with real hash
-4. Commit and push
+1. Update BUILDS.md with "Docker Hash vs TEE Measurement" section
+2. Explain: Docker hash = container layers, TEE measurement = runtime code
+3. Note that TEE attestation is the stronger guarantee
+4. Mention /attestation endpoint returns dstack code hash
 
-**Acceptance:** BUILDS.md has a real, verifiable image hash.
+**Acceptance:** BUILDS.md updated with clear distinction, commit pushed.
 
 ---
 
