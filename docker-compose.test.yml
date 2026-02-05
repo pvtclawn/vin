@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  vin-node:
+    image: nginx:alpine
+    ports:
+      - "80:80"
