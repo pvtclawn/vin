@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  vin-node:
+    image: ghcr.io/pvtclawn/vin-node:v0.1.0
+    ports:
+      - "3402:3402"
+    environment:
+      - VIN_PORT=3402
+      - VIN_KEY_PATH=/data/node.key
+      - VIN_PAY_TO=0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af
+      - VIN_PRICE_USD=0.001
+      - VIN_NETWORK=eip155:8453
+    volumes:
+      - vin-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3402/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  vin-data:
