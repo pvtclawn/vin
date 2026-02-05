@@ -3,11 +3,11 @@ FROM oven/bun:1.3-alpine@sha256:b0885548002187f088af5c7e04008f852c0a30cbe4192b5d
 
 WORKDIR /app
 
-# Copy package files
-COPY vin-node/package.json ./
+# Copy package files and lockfile
+COPY vin-node/package.json vin-node/bun.lock ./
 
-# Install dependencies
-RUN bun install
+# Install dependencies (frozen lockfile for reproducibility)
+RUN bun install --frozen-lockfile
 
 # Copy source
 COPY vin-node/src ./src
