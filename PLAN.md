@@ -56,6 +56,23 @@ VIN is now a **Confidential LLM Proxy** — users encrypt their API keys and pro
 
 ## Remaining Work
 
+### P3 — Trust Model Hardening (from 2026-02-05 challenge review)
+
+**P0 — TEE Trust Assumption**
+- [ ] Document reproducible build process
+- [ ] Publish container image hashes
+- [ ] Add code hash to attestation endpoint
+
+**P1 — Response Verification**
+- [ ] Research model fingerprinting (token probabilities?)
+- [ ] Consider cross-node verification design
+- [ ] Document limitations honestly in README
+
+**P1 — Economic Incentives**
+- [ ] Design stake/slash mechanism
+- [ ] Plan reputation system based on posw challenges
+- [ ] Define quality tiers
+
 ### For Production
 - [ ] Test with real Anthropic API key
 - [ ] Deploy to Phala Cloud
@@ -66,6 +83,7 @@ VIN is now a **Confidential LLM Proxy** — users encrypt their API keys and pro
 - [ ] Encypher layer (invisible watermarking)
 - [ ] Persistent replay cache (sqlite)
 - [ ] Response encryption for user
+- [ ] Multi-node discovery via ERC-8004 registry
 
 ---
 
