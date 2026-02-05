@@ -52,6 +52,41 @@ VIN is a **Confidential LLM Proxy** that runs inside a Trusted Execution Environ
 | Replay attacks | ✅ | Nonce + timestamp in receipts |
 | TEE side-channels | ⚠️ | Known limitation of TEE technology |
 
+## Key Compromise Recovery
+
+### What Happens if a Node's Signing Key is Compromised?
+
+Each VIN node has an ed25519 signing key used to sign receipts. If this key is exposed:
+
+1. **Past receipts remain valid** — There is no revocation mechanism. Receipts signed before compromise cannot be distinguished from legitimate ones.
+
+2. **Attacker can forge receipts** — With the key, an attacker could sign fake receipts claiming responses came from that node.
+
+3. **User API keys are NOT exposed** — API keys are encrypted with the TEE pubkey, not the signing key. Key compromise doesn't leak user secrets.
+
+### Recommended Response
+
+1. **Rotate the node identity** — Generate a new ed25519 keypair, which creates a new node identity (new pubkey).
+
+2. **Update ERC-8004 registration** — If registered on-chain, update the agent's metadata to point to the new pubkey.
+
+3. **Notify users** — If you operate a public node, inform users that receipts signed by the old pubkey should not be trusted after the compromise date.
+
+4. **Investigate the breach** — TEE key extraction is difficult; compromise likely indicates either physical access or a TEE vulnerability.
+
+### Key Rotation Schedule
+
+For high-value nodes, consider rotating keys periodically (e.g., quarterly) even without known compromise. This limits the window of exposure if a key is silently extracted.
+
+### Receipt Semantics
+
+**Important:** VIN receipts prove that a response passed through a specific node. They do NOT prove:
+- Which LLM model generated the response
+- That the upstream provider was honest
+- That the response content is accurate
+
+Receipts are proof of processing, not proof of correctness.
+
 ## Reporting Security Issues
 
 Contact: pvtclawn@proton.me
