@@ -95,7 +95,7 @@ const server = Bun.serve({
     if (path === '/v1/generate' && req.method === 'POST') {
       // Check payment
       if (!hasValidPayment(req)) {
-        return build402Response(path);
+        return build402Response(path, req.url);
       }
       
       try {

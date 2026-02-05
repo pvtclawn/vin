@@ -99,6 +99,7 @@ export interface GenerateResponse {
   output?: OutputV0;
   receipt: ReceiptV0;
   encrypted_response?: string;
+  response_ephemeral_pubkey?: string;
   response_nonce?: string;
   proof_bundle?: {
     attestation_report?: string;
