@@ -4,15 +4,19 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Document key compromise recovery
+### 🎯 NEXT TASK: Document reproducible build process
 
-**File:** `docs/SECURITY.md`
-**Add section:** "Key Compromise Recovery"
-- What to do if node's ed25519 key is exposed
-- Revocation mechanism (or lack thereof)
-- Recommendation for key rotation schedule
+**File:** `docs/BUILDS.md`
+**Goal:** Enable users to verify the TEE container matches published code
 
-**Acceptance:** SECURITY.md updated, commit pushed — users encrypt their API keys and prompts with the TEE pubkey, VIN decrypts inside TEE, calls the user's LLM provider, and returns an encrypted response with a signed receipt.
+**Contents:**
+- Dockerfile reproducibility notes
+- How to build locally: `docker build -t vin-node .`
+- How to compute image hash: `docker inspect --format='{{.Id}}'`
+- Published image hashes for each release
+- Link to GitHub Actions workflow (when added)
+
+**Acceptance:** BUILDS.md created, commit pushed.
 
 ---
 
