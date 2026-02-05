@@ -29,7 +29,7 @@ Compare your locally-built image hash against published hashes:
 
 | Version | Git Commit | Image Hash |
 |---------|------------|------------|
-| v0.1.0  | ed57148    | *(pending)* |
+| v0.1.0  | d1bd7b1    | `sha256:d18facf6286e092508541d487a8c0da87bbdbd94225f063ae80c34e72c99275a` |
 
 **Note:** Due to build timestamps and layer caching, exact hash matching requires `--no-cache` and pinned base images. We're working on fully reproducible builds.
 
