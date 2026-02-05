@@ -1,8 +1,12 @@
 import * as secp from '@noble/secp256k1';
 import { encrypt, parsePublicKey, decrypt } from './src/services/crypto';
 
-// OpenRouter API key
-const OPENROUTER_KEY = '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';
+// OpenRouter API key - set via environment variable
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
+if (!OPENROUTER_KEY) {
+  console.error('❌ Set OPENROUTER_API_KEY environment variable');
+  process.exit(1);
+}
 
 // Get TEE pubkey from server
 const health = await fetch('http://localhost:3402/health').then(r => r.json()) as any;
