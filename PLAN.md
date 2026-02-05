@@ -82,8 +82,8 @@ VIN is now a **Confidential LLM Proxy**
 ### P3 — Trust Model Hardening
 
 **P0 — Documentation Gaps (from 12:00 challenge)**
-- [ ] Document key compromise recovery process (what if ed25519 key leaks?)
-- [ ] Clarify receipt semantics: "proves node processing, NOT upstream model authenticity"
+- [x] ✅ Document key compromise recovery process (d7f5d93)
+- [x] ✅ Clarify receipt semantics (d7f5d93)
 - [x] ✅ Nonce generation verified: crypto.getRandomValues (128-bit)
 
 **P1 — TEE Trust Assumption**
