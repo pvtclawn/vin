@@ -91,6 +91,43 @@ Compare `code_hash` against expected values. If it matches, the node is running 
 
 **Bottom line:** Docker hashes are useful for reproducibility checks. TEE attestation is the stronger guarantee for runtime integrity.
 
+## Verification Workflow
+
+Step-by-step guide to verify a VIN node:
+
+### Step 1: Build locally
+
+```bash
+git clone https://github.com/pvtclawn/vin.git
+cd vin
+docker build --no-cache -t vin-node:local .
+```
+
+### Step 2: Get your image hash
+
+```bash
+docker inspect --format='{{.Id}}' vin-node:local
+# Example output: sha256:d18facf6286e092508541d487a8c0da87bbdbd94225f063ae80c34e72c99275a
+```
+
+### Step 3: Compare with published hash
+
+Check the table above. If hashes match → ✅ your build matches the published version.
+
+### Step 4: (Production) Verify TEE attestation
+
+```bash
+curl https://node.example.com/attestation | jq .code_hash
+# Compare with expected measurement
+```
+
+### If hashes don't match
+
+1. **Check git commit** — Are you on the same commit as the published version?
+2. **Check base image** — Run `docker pull oven/bun:1.3-alpine` to get latest
+3. **Check platform** — ARM vs x86 builds produce different hashes
+4. **Report issue** — Open a GitHub issue with your environment details
+
 ---
 
 *Last updated: 2026-02-05*
