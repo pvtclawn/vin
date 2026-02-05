@@ -4,17 +4,16 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Add /attestation endpoint
+### 🎯 NEXT TASK: Pin base image digest (P2)
 
-**Goal:** Address final P1 — return TEE code measurement from endpoint
+**Goal:** Address challenge P2 — reproducible base image
 
 **Steps:**
-1. Add GET /attestation endpoint to vin-node
-2. Return code_hash, platform, timestamp
-3. In dev mode (no TEE), return placeholder with warning
-4. Add test for endpoint
+1. Get current alpine base image digest
+2. Update Dockerfile to use pinned digest
+3. Document base image verification in BUILDS.md
 
-**Acceptance:** /attestation returns structured response, test passes.
+**Acceptance:** Dockerfile uses pinned digest, commit pushed.
 
 ---
 
