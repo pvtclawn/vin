@@ -4,16 +4,17 @@
 
 VIN is now a **Confidential LLM Proxy**
 
-### 🎯 NEXT TASK: Add verification workflow with examples
+### 🎯 NEXT TASK: Add /attestation endpoint
 
-**Goal:** Address challenge P1 — tell users step-by-step how to verify
+**Goal:** Address final P1 — return TEE code measurement from endpoint
 
 **Steps:**
-1. Add "Verification Workflow" section to BUILDS.md
-2. Include: clone → build → compare hash → what if mismatch
-3. Add example terminal output
+1. Add GET /attestation endpoint to vin-node
+2. Return code_hash, platform, timestamp
+3. In dev mode (no TEE), return placeholder with warning
+4. Add test for endpoint
 
-**Acceptance:** BUILDS.md has clear verification steps, commit pushed.
+**Acceptance:** /attestation returns structured response, test passes.
 
 ---
 
