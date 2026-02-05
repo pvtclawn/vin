@@ -2,7 +2,17 @@
 
 ## Current Status: Confidential LLM Proxy ✅
 
-VIN is now a **Confidential LLM Proxy** — users encrypt their API keys and prompts with the TEE pubkey, VIN decrypts inside TEE, calls the user's LLM provider, and returns an encrypted response with a signed receipt.
+VIN is now a **Confidential LLM Proxy**
+
+### 🎯 NEXT TASK: Document key compromise recovery
+
+**File:** `docs/SECURITY.md`
+**Add section:** "Key Compromise Recovery"
+- What to do if node's ed25519 key is exposed
+- Revocation mechanism (or lack thereof)
+- Recommendation for key rotation schedule
+
+**Acceptance:** SECURITY.md updated, commit pushed — users encrypt their API keys and prompts with the TEE pubkey, VIN decrypts inside TEE, calls the user's LLM provider, and returns an encrypted response with a signed receipt.
 
 ---
 
@@ -69,22 +79,30 @@ VIN is now a **Confidential LLM Proxy** — users encrypt their API keys and pro
 
 ## Remaining Work
 
-### P3 — Trust Model Hardening (from 2026-02-05 challenge review)
+### P3 — Trust Model Hardening
 
-**P0 — TEE Trust Assumption**
+**P0 — Documentation Gaps (from 12:00 challenge)**
+- [ ] Document key compromise recovery process (what if ed25519 key leaks?)
+- [ ] Clarify receipt semantics: "proves node processing, NOT upstream model authenticity"
+- [x] ✅ Nonce generation verified: crypto.getRandomValues (128-bit)
+
+**P1 — TEE Trust Assumption**
 - [ ] Document reproducible build process
 - [ ] Publish container image hashes
 - [ ] Add code hash to attestation endpoint
 
-**P1 — Response Verification**
+**P2 — Response Verification**
 - [ ] Research model fingerprinting (token probabilities?)
 - [ ] Consider cross-node verification design
-- [ ] Document limitations honestly in README
 
-**P1 — Economic Incentives**
+**P2 — Economic Incentives**
 - [ ] Design stake/slash mechanism
 - [ ] Plan reputation system based on posw challenges
 - [ ] Define quality tiers
+
+**P4 — Privacy Hardening**
+- [ ] Optional response padding (hide token count)
+- [ ] Artificial latency jitter (hide processing patterns)
 
 ### For Production
 - [ ] Test with real Anthropic API key
