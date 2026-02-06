@@ -1,12 +1,9 @@
 /**
- * VIN Node - TEE Attestation
+ * VIN Node - TEE Attestation (HTTP-based)
  * 
- * Integrates with dstack SDK for TEE attestation reports.
+ * Calls dstack agent directly via HTTP to avoid SDK import issues.
  * When running in a dstack CVM, provides real TDX attestation.
  * Otherwise returns a stub response.
- * 
- * Note: dstack SDK is imported lazily to avoid missing dependency errors
- * when running outside TEE environment.
  */
 
 export interface AttestationInfo {
@@ -17,74 +14,80 @@ export interface AttestationInfo {
   signer_pubkey?: string;  // base64url encoded pubkey bound to TEE
 }
 
-// Singleton client (lazy init)
-let tappdClient: unknown = null;
-
-async function getClient(): Promise<unknown> {
-  if (!tappdClient) {
-    try {
-      // Dynamic import to avoid loading dstack SDK when not in TEE
-      const { TappdClient } = await import('@phala/dstack-sdk');
-      const endpoint = process.env.DSTACK_SIMULATOR_ENDPOINT || 'http://localhost:8090';
-      tappdClient = new TappdClient(endpoint);
-    } catch (error) {
-      console.log('[TEE] dstack SDK not available:', (error as Error).message);
-      return null;
-    }
-  }
-  return tappdClient;
+interface TdxQuoteResponse {
+  quote?: string;
+  rtmr0?: string;
+  rtmr1?: string;
+  rtmr2?: string;
+  rtmr3?: string;
 }
 
+interface DeriveKeyResponse {
+  key?: string;
+  certificate_chain?: string[];
+}
+
+const DSTACK_ENDPOINT = process.env.DSTACK_SIMULATOR_ENDPOINT || 'http://localhost:8090';
+
 /**
- * Check if running in dstack TEE environment
+ * Check if dstack agent is available
  */
 export async function isTeeAvailable(): Promise<boolean> {
   try {
-    const client = await getClient() as { tdxQuote: (data: string) => Promise<unknown> } | null;
-    if (!client) return false;
-    const info = await client.tdxQuote('test');
-    return !!info;
+    const response = await fetch(`${DSTACK_ENDPOINT}/prpc/Tappd.TdxQuote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ report_data: 'test' }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
   } catch {
     return false;
   }
 }
 
 /**
- * Get attestation report for given data
+ * Get TDX quote (attestation) via HTTP
  */
 export async function getAttestation(
   reportData: string,
   nodePubkey?: string
 ): Promise<AttestationInfo> {
   try {
-    const client = await getClient() as { tdxQuote: (data: string) => Promise<{ rtmr0?: string } | null> } | null;
-    if (!client) {
+    // Hash the report data to fit in the 64-byte TDX report data field
+    const reportDataHex = Buffer.from(reportData).toString('hex');
+    
+    const response = await fetch(`${DSTACK_ENDPOINT}/prpc/Tappd.TdxQuote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        report_data: reportDataHex.slice(0, 128), // 64 bytes max
+        hash_algorithm: 'sha256',
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.log('[TEE] TdxQuote request failed:', response.status);
       return { type: 'none', available: false };
     }
+
+    const quote = await response.json() as TdxQuoteResponse;
     
-    // Generate TDX quote with report data
-    const quote = await client.tdxQuote(reportData);
-    
-    if (!quote) {
-      return {
-        type: 'none',
-        available: false,
-      };
+    if (!quote.quote) {
+      return { type: 'none', available: false };
     }
-    
+
     return {
       type: 'tdx.dstack.v0',
       available: true,
-      report: Buffer.from(JSON.stringify(quote)).toString('base64url'),
+      report: quote.quote, // Already base64
       measurement: quote.rtmr0 || undefined,
       signer_pubkey: nodePubkey,
     };
   } catch (error) {
     console.log('[TEE] Attestation not available:', (error as Error).message);
-    return {
-      type: 'none',
-      available: false,
-    };
+    return { type: 'none', available: false };
   }
 }
 
@@ -93,17 +96,30 @@ export async function getAttestation(
  */
 export async function deriveKey(path: string): Promise<Uint8Array | null> {
   try {
-    const client = await getClient() as { deriveKey: (a: string, b: string) => Promise<{ key?: string } | null> } | null;
-    if (!client) return null;
+    const response = await fetch(`${DSTACK_ENDPOINT}/prpc/Tappd.DeriveKey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        path,
+        subject: path,  // Use same value for both
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      console.log('[TEE] DeriveKey request failed:', response.status);
+      return null;
+    }
+
+    const derived = await response.json() as DeriveKeyResponse;
     
-    const derived = await client.deriveKey(path, path);
-    
-    if (derived?.key) {
+    if (derived.key) {
       // Take first 32 bytes for secp256k1 seed
       return new Uint8Array(Buffer.from(derived.key, 'hex').slice(0, 32));
     }
     return null;
-  } catch {
+  } catch (error) {
+    console.log('[TEE] Key derivation not available:', (error as Error).message);
     return null;
   }
 }
