@@ -7,6 +7,14 @@
  * @see https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_evm.md
  */
 
+import { sha256 } from '@noble/hashes/sha2.js';
+import { 
+  HTTPFacilitatorClient, 
+  decodePaymentSignatureHeader,
+  type FacilitatorConfig 
+} from '@x402/core/http';
+import { facilitator as coinbaseFacilitator } from '@coinbase/x402';
+
 // USDC contract address on Base Mainnet
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
@@ -48,6 +56,18 @@ const DEFAULT_CONFIG: PaymentConfig = {
   amount: process.env.VIN_AMOUNT ?? '1000',  // $0.001 in USDC (6 decimals)
   network: process.env.VIN_NETWORK ?? 'eip155:8453',  // Base Mainnet
 };
+
+// Use Coinbase's hosted facilitator by default
+// Can be overridden with VIN_FACILITATOR_URL
+const facilitatorConfig: FacilitatorConfig = coinbaseFacilitator;
+let facilitatorClient: HTTPFacilitatorClient | null = null;
+
+function getFacilitatorClient(): HTTPFacilitatorClient {
+  if (!facilitatorClient) {
+    facilitatorClient = new HTTPFacilitatorClient(facilitatorConfig);
+  }
+  return facilitatorClient;
+}
 
 /**
  * Build 402 Payment Required response (x402 v2)
@@ -95,35 +115,60 @@ export function build402Response(path: string, url: string, config: PaymentConfi
  * x402 v2: Uses PAYMENT-SIGNATURE header
  * x402 v1 fallback: Uses X-Payment header
  * Test mode: Accept any header or ?paid=true
- * 
- * ⚠️ P0 WARNING: This currently accepts any payment header without verification.
- * Production deployment requires:
- * 1. Facilitator URL configuration (x402 payment verification service)
- * 2. Call facilitator to verify the PAYMENT-SIGNATURE is valid and paid
- * 3. Check payment amount matches our requirements
- * 
- * Until facilitator integration, this is effectively test mode only.
  */
-export function hasValidPayment(req: Request): boolean {
+export async function hasValidPayment(req: Request): Promise<boolean> {
   const testMode = process.env.VIN_TEST_MODE === '1';
   
   // v2 header
   const paymentSigHeader = req.headers.get('PAYMENT-SIGNATURE') || req.headers.get('payment-signature');
   if (paymentSigHeader) {
     console.log('[x402] v2 PAYMENT-SIGNATURE present:', paymentSigHeader.slice(0, 30) + '...');
-    // TODO P0: Verify payment with facilitator
-    // const valid = await verifyWithFacilitator(paymentSigHeader, DEFAULT_CONFIG);
-    // if (!valid) return false;
-    console.warn('[x402] ⚠️ Payment verification not implemented - accepting any header');
-    return true;
+    
+    try {
+      // Decode the payment payload
+      const paymentPayload = decodePaymentSignatureHeader(paymentSigHeader);
+      
+      // Build requirements to verify against
+      const requirements = {
+        scheme: 'exact' as const,
+        network: DEFAULT_CONFIG.network,
+        amount: DEFAULT_CONFIG.amount,
+        asset: USDC_BASE,
+        payTo: DEFAULT_CONFIG.payTo,
+        maxTimeoutSeconds: 60,
+        extra: {
+          assetTransferMethod: 'eip3009' as const,
+          name: 'USDC',
+          version: '2',
+        },
+      };
+      
+      // Verify with facilitator
+      const client = getFacilitatorClient();
+      const verifyResult = await client.verifyPayment(paymentPayload, requirements);
+      
+      if (verifyResult.valid) {
+        console.log('[x402] Payment verified successfully');
+        return true;
+      } else {
+        console.warn('[x402] Payment verification failed:', verifyResult.invalidReason);
+        return false;
+      }
+    } catch (error) {
+      console.error('[x402] Payment verification error:', (error as Error).message);
+      // In production, fail closed (reject on error)
+      // In test mode, accept
+      return testMode;
+    }
   }
   
   // v1 fallback
   const paymentHeader = req.headers.get('X-Payment') || req.headers.get('x-payment');
   if (paymentHeader) {
     console.log('[x402] v1 X-Payment present:', paymentHeader.slice(0, 30) + '...');
-    // TODO: Verify payment with facilitator
-    return true;
+    // v1 payments not supported in production
+    console.warn('[x402] v1 payments deprecated, use PAYMENT-SIGNATURE header');
+    return testMode;
   }
   
   // Test mode: Also accept query param
@@ -152,7 +197,6 @@ export function getPaymentInfo(req: Request): { type: string; payment_header_has
   }
   
   // Hash the payment header for commitment (SHA-256)
-  const { sha256 } = require('@noble/hashes/sha2.js');
   const encoder = new TextEncoder();
   const data = encoder.encode(paymentHeader);
   const hash = sha256(data);
@@ -171,7 +215,7 @@ export function requirePayment(
   config: PaymentConfig = DEFAULT_CONFIG
 ): (req: Request) => Promise<Response> | Response {
   return async (req: Request) => {
-    if (!hasValidPayment(req)) {
+    if (!(await hasValidPayment(req))) {
       const url = new URL(req.url);
       return build402Response(url.pathname, url.href, config);
     }

@@ -140,8 +140,8 @@ const server = Bun.serve({
     
     // Generate (confidential proxy)
     if (path === '/v1/generate' && req.method === 'POST') {
-      // Check payment
-      if (!hasValidPayment(req)) {
+      // Check payment (async - calls facilitator)
+      if (!(await hasValidPayment(req))) {
         return build402Response(path, req.url);
       }
       
