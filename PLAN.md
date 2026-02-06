@@ -4,20 +4,24 @@
 
 All P0/P1 security issues addressed. Deployed to ghcr.io, ready for Phala redeploy.
 
-### 🔴 STRATEGIC QUESTION (Open)
+### 🟡 STRATEGIC DIRECTION: Input Sanitization Module (ISM)
 
-**Egor's challenge:** VIN proves LLM invocation, not autonomous operation.
+**Problem:** VIN proves LLM invocation, not autonomous operation. Human can still inject prompts.
 
-- ✅ Proves: LLM was called, TEE executed, model/provider used
-- ❌ Doesn't prove: No human wrote the prompt, chain was autonomous
+**Solution identified:** Input Sanitization Module (ISM) — tiny TEE that only gates inputs:
+1. Timestamps all inputs
+2. Verifies inputs from approved sources (APIs, contracts)
+3. Blocks direct human text injection
+4. Signs sanitized input
 
-**Current value props:**
-1. BYOK privacy (encrypted API keys)
-2. Audit trail (prove LLM called, not faked)
-3. Cost attribution (receipt shows model)
-4. x402 micropayments
+**Why ISM over full agent TEE:**
+- Orders of magnitude simpler
+- No adoption barrier (agents run anywhere)
+- ~90% confidence achievable with ISM + reputation + economic signals
 
-**Waiting for direction:** Pivot positioning or current scope sufficient?
+**Red-teamed (5 attack vectors):** See `memory/challenges/2026-02-06--ism-red-team.md`
+
+**Status:** Awaiting Egor's go-ahead to build ISM prototype
 
 ---
 
