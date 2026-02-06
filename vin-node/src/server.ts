@@ -18,6 +18,7 @@ import { hasValidPayment, build402Response } from './services/x402';
 import { getAttestation, deriveKey } from './services/tee';
 import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey, hashForCommitment } from './services/crypto';
 import { callLLM, type LLMRequest } from './services/llm-proxy';
+import { rateLimiter, RateLimiter } from './services/rate-limit';
 import { PORT, LLM_URL, ANTHROPIC_API_KEY, LLM_MODEL } from './config';
 
 // Node configuration
@@ -89,6 +90,21 @@ const server = Bun.serve({
     
     if (req.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers });
+    }
+    
+    // Rate limiting (skip for health checks)
+    if (path !== '/health') {
+      const clientKey = RateLimiter.getKey(req);
+      if (!rateLimiter.check(clientKey)) {
+        return Response.json({
+          error: 'rate_limited',
+          message: 'Too many requests. Please slow down.',
+          retry_after_ms: 1000,
+        }, { 
+          status: 429, 
+          headers: { ...headers, 'Retry-After': '1' } 
+        });
+      }
     }
     
     // Health check
