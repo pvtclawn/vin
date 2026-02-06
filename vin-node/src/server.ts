@@ -26,6 +26,28 @@ const NODE_KEYS: NodeKeys = loadOrGenerateKeys();
 const teeSeed = await deriveKey('vin-encryption-v1');
 const ENC_KEYS = await getTeeEncryptionKeys(teeSeed);
 
+// Encrypted payload nonce cache (prevents replay attacks)
+// Map of nonce -> expiry timestamp
+const encryptedNonces = new Map<string, number>();
+const NONCE_EXPIRY_MS = 600_000; // 10 minutes
+
+function checkAndCacheNonce(nonce: string): boolean {
+  // Clean expired nonces
+  const now = Date.now();
+  for (const [key, expiry] of encryptedNonces) {
+    if (expiry < now) encryptedNonces.delete(key);
+  }
+  
+  // Check if nonce was seen
+  if (encryptedNonces.has(nonce)) {
+    return false; // Replay detected
+  }
+  
+  // Cache the nonce
+  encryptedNonces.set(nonce, now + NONCE_EXPIRY_MS);
+  return true;
+}
+
 console.log('🔑 Node signing pubkey:', Buffer.from(NODE_KEYS.publicKey).toString('base64url').slice(0, 16) + '...');
 console.log('🔐 Encryption pubkey:', encodePublicKey(ENC_KEYS.publicKey).slice(0, 16) + '...');
 
@@ -117,6 +139,12 @@ const server = Bun.serve({
         if (body.encrypted_payload && body.ephemeral_pubkey && body.nonce && body.user_pubkey) {
           // Confidential proxy mode (ECIES)
           isConfidential = true;
+          
+          // P0 FIX: Check nonce for replay protection
+          if (!checkAndCacheNonce(body.nonce)) {
+            return Response.json({ error: 'replay_detected', message: 'Nonce already used' }, { status: 400, headers });
+          }
+          
           userPubkey = parsePublicKey(body.user_pubkey);
           
           const decrypted = decrypt(

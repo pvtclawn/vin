@@ -95,6 +95,14 @@ export function build402Response(path: string, url: string, config: PaymentConfi
  * x402 v2: Uses PAYMENT-SIGNATURE header
  * x402 v1 fallback: Uses X-Payment header
  * Test mode: Accept any header or ?paid=true
+ * 
+ * ⚠️ P0 WARNING: This currently accepts any payment header without verification.
+ * Production deployment requires:
+ * 1. Facilitator URL configuration (x402 payment verification service)
+ * 2. Call facilitator to verify the PAYMENT-SIGNATURE is valid and paid
+ * 3. Check payment amount matches our requirements
+ * 
+ * Until facilitator integration, this is effectively test mode only.
  */
 export function hasValidPayment(req: Request): boolean {
   const testMode = process.env.VIN_TEST_MODE === '1';
@@ -103,7 +111,10 @@ export function hasValidPayment(req: Request): boolean {
   const paymentSigHeader = req.headers.get('PAYMENT-SIGNATURE') || req.headers.get('payment-signature');
   if (paymentSigHeader) {
     console.log('[x402] v2 PAYMENT-SIGNATURE present:', paymentSigHeader.slice(0, 30) + '...');
-    // TODO: Verify payment with facilitator
+    // TODO P0: Verify payment with facilitator
+    // const valid = await verifyWithFacilitator(paymentSigHeader, DEFAULT_CONFIG);
+    // if (!valid) return false;
+    console.warn('[x402] ⚠️ Payment verification not implemented - accepting any header');
     return true;
   }
   
@@ -140,13 +151,15 @@ export function getPaymentInfo(req: Request): { type: string; payment_header_has
     return { type: 'none' };
   }
   
-  // Hash the payment header for commitment
+  // Hash the payment header for commitment (SHA-256)
+  const { sha256 } = require('@noble/hashes/sha2.js');
   const encoder = new TextEncoder();
   const data = encoder.encode(paymentHeader);
+  const hash = sha256(data);
   
   return {
     type: 'x402.v2',
-    payment_header_hash: Buffer.from(data.slice(0, 32)).toString('hex'),
+    payment_header_hash: Buffer.from(hash).toString('hex'),
   };
 }
 

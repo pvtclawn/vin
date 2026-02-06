@@ -119,9 +119,13 @@ export function decrypt(
 }
 
 /**
- * Parse hex public key
+ * Parse hex public key with validation
+ * Throws if not a valid secp256k1 point (P0 fix: prevent invalid curve attacks)
  */
 export function parsePublicKey(hex: string): Uint8Array {
+  // Validate it's a valid point on secp256k1 curve
+  // Point.fromHex takes hex string directly
+  secp.Point.fromHex(hex);
   return Buffer.from(hex, 'hex');
 }
 
