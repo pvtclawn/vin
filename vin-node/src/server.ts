@@ -16,7 +16,7 @@ import { loadOrGenerateKeys, type NodeKeys } from './services/keys';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types/index';
 import { hasValidPayment, build402Response } from './services/x402';
 import { getAttestation, deriveKey } from './services/tee';
-import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey } from './services/crypto';
+import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey, hashForCommitment } from './services/crypto';
 import { callLLM, type LLMRequest } from './services/llm-proxy';
 import { PORT, LLM_URL, ANTHROPIC_API_KEY, LLM_MODEL } from './config';
 
@@ -150,6 +150,7 @@ const server = Bun.serve({
         let llmRequest: LLMRequest;
         let userPubkey: Uint8Array | null = null;
         let isConfidential = false;
+        let inputsCommitment: string | null = null;  // For verifiable receipts
         
         if (body.encrypted_payload && body.ephemeral_pubkey && body.nonce && body.user_pubkey) {
           // Confidential proxy mode (ECIES)
@@ -188,10 +189,27 @@ const server = Bun.serve({
           }
           
           llmRequest = parseResult.data;
+          
+          // Create verifiable commitment: hash of the decrypted request
+          // User can independently compute this to verify receipt
+          inputsCommitment = hashForCommitment({
+            provider_url: llmRequest.provider_url,
+            model: llmRequest.model,
+            messages: llmRequest.messages,
+            // Note: api_key intentionally excluded from commitment for privacy
+          });
+          
           console.log('[proxy] Confidential mode - calling', llmRequest.provider_url);
         } else if (body.request) {
-          // Legacy mode (for testing without encryption)
-          console.warn('[proxy] Legacy mode - no encryption');
+          // Legacy mode - DISABLED in production
+          // This mode uses server-side API keys which contradicts the "zero secrets" model
+          if (process.env.VIN_ALLOW_LEGACY !== '1') {
+            return Response.json({ 
+              error: 'legacy_mode_disabled', 
+              message: 'Legacy mode is disabled. Use encrypted_payload for confidential requests.' 
+            }, { status: 400, headers });
+          }
+          console.warn('[proxy] ⚠️ Legacy mode enabled - using server-side API key');
           llmRequest = {
             provider_url: LLM_URL,
             api_key: ANTHROPIC_API_KEY || '',
@@ -214,11 +232,14 @@ const server = Bun.serve({
         };
         
         // Build request object for receipt
+        // In confidential mode, use the commitment hash instead of '[encrypted]'
         const actionRequest: ActionRequestV0 = {
           schema: 'vin.action_request.v0',
           policy_id: isConfidential ? 'P2_CONFIDENTIAL_PROXY_V1' : 'P0_COMPOSE_POST_V1',
           action_type: isConfidential ? 'confidential_llm_call' : 'compose_post',
-          prompt: isConfidential ? '[encrypted]' : (body.request?.prompt || ''),
+          // For confidential: include commitment hash (user can verify)
+          // For non-confidential: include actual prompt
+          prompt: isConfidential ? `[commitment:${inputsCommitment}]` : (body.request?.prompt || ''),
         };
         
         // Create receipt
@@ -229,8 +250,13 @@ const server = Bun.serve({
         
         if (isConfidential && userPubkey) {
           // Encrypt response for user
+          // Include request nonce to bind response to specific request
           const encrypted = encrypt(
-            { text: llmResponse.text, usage: llmResponse.usage },
+            { 
+              text: llmResponse.text, 
+              usage: llmResponse.usage,
+              request_nonce: body.nonce,  // Bind response to request
+            },
             userPubkey
           );
           
