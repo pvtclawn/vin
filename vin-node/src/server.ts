@@ -284,9 +284,24 @@ const server = Bun.serve({
         
       } catch (error) {
         console.error('[generate] Error:', error);
+        // Sanitize error message - don't leak internal details
+        const err = error as Error;
+        let safeMessage = 'Internal server error';
+        
+        // Only expose specific known error types
+        if (err.message.includes('Invalid provider_url')) {
+          safeMessage = 'Invalid provider URL';
+        } else if (err.message.includes('rate_limited') || err.message.includes('Rate limit')) {
+          safeMessage = 'Provider rate limit exceeded';
+        } else if (err.message.includes('authentication') || err.message.includes('api_key') || err.message.includes('401')) {
+          safeMessage = 'Provider authentication failed';
+        } else if (err.message.includes('timeout') || err.message.includes('abort')) {
+          safeMessage = 'Request timed out';
+        }
+        
         return Response.json({
           error: 'generation_failed',
-          message: (error as Error).message,
+          message: safeMessage,
         }, { status: 500, headers });
       }
     }
