@@ -7,6 +7,7 @@
 import * as ed from '@noble/ed25519';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import canonicalize from 'canonicalize';
+import { LRUCache } from './lru-cache';
 import type { 
   ActionRequestV0, 
   OutputV0, 
@@ -127,8 +128,8 @@ export function createReceipt(
 
 // ============ Receipt Verification ============
 
-// Nonce cache for replay detection (in-memory for MVP)
-const seenNonces = new Map<string, number>(); // nonce -> expiry time
+// Nonce cache for replay detection - bounded LRU to prevent memory leak
+const seenNonces = new LRUCache<boolean>(10_000, 600_000); // 10k max, 10min TTL
 
 export function verifyReceipt(
   request: ActionRequestV0,
@@ -155,12 +156,8 @@ export function verifyReceipt(
     if (seenNonces.has(nonceKey)) {
       return { valid: false, reason: 'replay_detected' };
     }
-    // Record nonce with expiry
-    seenNonces.set(nonceKey, receipt.exp);
-    // Cleanup old nonces (simple approach)
-    for (const [key, exp] of seenNonces) {
-      if (exp < now) seenNonces.delete(key);
-    }
+    // Record nonce (LRU cache handles expiry and cleanup)
+    seenNonces.set(nonceKey, true);
     
     // 4. Commitment recompute
     if (receipt.inputs_commitment !== hashJson(request.inputs)) {

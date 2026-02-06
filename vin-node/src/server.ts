@@ -19,6 +19,7 @@ import { getAttestation, deriveKey } from './services/tee';
 import { getTeeEncryptionKeys, decrypt, encrypt, parsePublicKey, encodePublicKey, hashForCommitment } from './services/crypto';
 import { callLLM, type LLMRequest } from './services/llm-proxy';
 import { rateLimiter, RateLimiter } from './services/rate-limit';
+import { LRUCache } from './services/lru-cache';
 import { PORT, LLM_URL, ANTHROPIC_API_KEY, LLM_MODEL } from './config';
 
 // Node configuration
@@ -29,9 +30,8 @@ const teeSeed = await deriveKey('vin-encryption-v1');
 const ENC_KEYS = await getTeeEncryptionKeys(teeSeed);
 
 // Encrypted payload nonce cache (prevents replay attacks)
-// Map of nonce -> expiry timestamp
-const encryptedNonces = new Map<string, number>();
-const NONCE_EXPIRY_MS = 600_000; // 10 minutes
+// Bounded LRU cache to prevent memory leak under load
+const encryptedNonces = new LRUCache<boolean>(10_000, 600_000); // 10k max, 10min TTL
 
 // Strict schema for LLM request (P1 Fix: Post-decryption validation)
 const LLMRequestSchema = z.object({
@@ -48,19 +48,13 @@ const LLMRequestSchema = z.object({
 }).strict();
 
 function checkAndCacheNonce(nonce: string): boolean {
-  // Clean expired nonces
-  const now = Date.now();
-  for (const [key, expiry] of encryptedNonces) {
-    if (expiry < now) encryptedNonces.delete(key);
-  }
-  
-  // Check if nonce was seen
+  // Check if nonce was seen (LRU cache handles expiry)
   if (encryptedNonces.has(nonce)) {
     return false; // Replay detected
   }
   
   // Cache the nonce
-  encryptedNonces.set(nonce, now + NONCE_EXPIRY_MS);
+  encryptedNonces.set(nonce, true);
   return true;
 }
 
