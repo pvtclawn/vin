@@ -10,6 +10,7 @@
  * - POST /v1/verify
  */
 
+import { z } from 'zod';
 import { createReceipt, verifyReceipt } from './services/receipt';
 import { loadOrGenerateKeys, type NodeKeys } from './services/keys';
 import type { ActionRequestV0, OutputV0, GenerateResponse, VerifyRequest, VerifyResponse } from './types/index';
@@ -30,6 +31,20 @@ const ENC_KEYS = await getTeeEncryptionKeys(teeSeed);
 // Map of nonce -> expiry timestamp
 const encryptedNonces = new Map<string, number>();
 const NONCE_EXPIRY_MS = 600_000; // 10 minutes
+
+// Strict schema for LLM request (P1 Fix: Post-decryption validation)
+const LLMRequestSchema = z.object({
+  provider_url: z.string().url(),
+  api_key: z.string().min(1, 'api_key is required'),
+  model: z.string().min(1, 'model is required'),
+  messages: z.array(z.object({
+    role: z.enum(['system', 'user', 'assistant']),
+    content: z.string().max(1_000_000), // Prevent memory abuse
+  })).min(1, 'messages must have at least one entry').max(100),
+  max_tokens: z.number().int().positive().max(100000).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  headers: z.record(z.string()).optional(),
+}).strict();
 
 function checkAndCacheNonce(nonce: string): boolean {
   // Clean expired nonces
@@ -154,7 +169,25 @@ const server = Bun.serve({
             encKeys.secretKey
           );
           
-          llmRequest = JSON.parse(decrypted) as LLMRequest;
+          // P1 FIX: Post-decryption validation with Zod
+          let rawRequest: unknown;
+          try {
+            rawRequest = JSON.parse(decrypted);
+          } catch {
+            return Response.json({ error: 'invalid_payload', message: 'Decrypted payload is not valid JSON' }, { status: 400, headers });
+          }
+          
+          const parseResult = LLMRequestSchema.safeParse(rawRequest);
+          if (!parseResult.success) {
+            console.warn('[proxy] Validation failed:', parseResult.error.format());
+            return Response.json({
+              error: 'invalid_payload',
+              message: 'Payload validation failed',
+              details: parseResult.error.flatten(),
+            }, { status: 400, headers });
+          }
+          
+          llmRequest = parseResult.data;
           console.log('[proxy] Confidential mode - calling', llmRequest.provider_url);
         } else if (body.request) {
           // Legacy mode (for testing without encryption)
@@ -169,7 +202,7 @@ const server = Bun.serve({
           return Response.json({ error: 'Missing encrypted_payload or request' }, { status: 400, headers });
         }
         
-        // Call LLM
+        // Call LLM (Validation/SSRF/Timeouts happen inside)
         const llmResponse = await callLLM(llmRequest);
         
         // Create output
