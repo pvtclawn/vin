@@ -97,7 +97,7 @@ async function resolveAndCache(hostname: string): Promise<string> {
     return cached.ip;
   }
 
-  const addresses = await Bun.dns.lookup(hostname, { family: 4, all: true });
+  const addresses = await Bun.dns.lookup(hostname, { family: 4 } as any);
   if (!addresses || addresses.length === 0) {
     throw new Error(`DNS resolution failed for ${hostname}`);
   }

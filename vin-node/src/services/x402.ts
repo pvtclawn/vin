@@ -131,7 +131,7 @@ export async function hasValidPayment(req: Request): Promise<boolean> {
       // Build requirements to verify against
       const requirements = {
         scheme: 'exact' as const,
-        network: DEFAULT_CONFIG.network,
+        network: DEFAULT_CONFIG.network as `${string}:${string}`,
         amount: DEFAULT_CONFIG.amount,
         asset: USDC_BASE,
         payTo: DEFAULT_CONFIG.payTo,
@@ -145,9 +145,9 @@ export async function hasValidPayment(req: Request): Promise<boolean> {
       
       // Verify with facilitator
       const client = getFacilitatorClient();
-      const verifyResult = await client.verifyPayment(paymentPayload, requirements);
+      const verifyResult = await client.verify(paymentPayload, requirements);
       
-      if (verifyResult.valid) {
+      if (verifyResult.isValid) {
         console.log('[x402] Payment verified successfully');
         return true;
       } else {

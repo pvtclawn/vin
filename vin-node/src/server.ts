@@ -44,7 +44,7 @@ const LLMRequestSchema = z.object({
   })).min(1, 'messages must have at least one entry').max(100),
   max_tokens: z.number().int().positive().max(100000).optional(),
   temperature: z.number().min(0).max(2).optional(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 }).strict();
 
 function checkAndCacheNonce(nonce: string): boolean {
