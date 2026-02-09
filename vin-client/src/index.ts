@@ -103,7 +103,7 @@ export interface NodeInfo {
  */
 export class VINClient {
   private config: VINClientConfig;
-  private paidFetch: typeof fetch;
+  private paidFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   private encryptionPubkey: string | null = null;
   private userSecretKey: Uint8Array;
   private userPubkey: string;
@@ -117,9 +117,10 @@ export class VINClient {
     this.userPubkey = Buffer.from(pubkeyBytes).toString('hex');
     
     // Set up x402 payment client
-    const evmSigner = toClientEvmSigner(config.account);
+    const evmSigner = toClientEvmSigner(config.account as unknown as Parameters<typeof toClientEvmSigner>[0]);
     const client = new x402Client().register('eip155:8453', new ExactEvmScheme(evmSigner));
-    this.paidFetch = wrapFetchWithPayment(config.fetch ?? fetch, client);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.paidFetch = wrapFetchWithPayment((config.fetch ?? globalThis.fetch) as any, client);
   }
 
   /**
