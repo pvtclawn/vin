@@ -461,3 +461,90 @@ describe('ISM - P0/P1 hardening', () => {
     expect(error).toBe('Input rejected');
   });
 });
+
+// ========================================
+// Timestamp validation (P1 #5)
+// ========================================
+describe('timestamp validation', () => {
+  test('uses injected clock source for received_at', async () => {
+    const fixedTime = 1700000000000;
+    const config = makeConfig({ clockSource: () => fixedTime });
+    const ism = createISM(config);
+    
+    const result = await ism.attest({
+      data: 'test',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    
+    expect('error' in result).toBe(false);
+    expect((result as InputAttestation).received_at).toBe(fixedTime);
+  });
+
+  test('rejects attestation with negative clock value', async () => {
+    const config = makeConfig({ clockSource: () => -1 });
+    const ism = createISM(config);
+    
+    const result = await ism.attest({
+      data: 'test',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    
+    expect('error' in result).toBe(true);
+    expect((result as { error: string }).error).toBe('Clock error');
+  });
+
+  test('rejects attestation with NaN clock value', async () => {
+    const config = makeConfig({ clockSource: () => NaN });
+    const ism = createISM(config);
+    
+    const result = await ism.attest({
+      data: 'test',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    
+    expect('error' in result).toBe(true);
+    expect((result as { error: string }).error).toBe('Clock error');
+  });
+
+  test('verify rejects attestation with future timestamp beyond drift', async () => {
+    const now = Date.now();
+    const config = makeConfig({ clockSource: () => now });
+    const ism = createISM(config);
+    
+    // Create a valid attestation first
+    const result = await ism.attest({
+      data: 'legit',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    expect('error' in result).toBe(false);
+    const attestation = result as InputAttestation;
+    
+    // Tamper: set received_at to 10 minutes in the future (beyond 5 min drift)
+    const tampered = { ...attestation, received_at: now + 10 * 60 * 1000 };
+    // Re-sign won't match, but even before sig check, timestamp should fail
+    const verification = await ism.verify(tampered);
+    expect(verification.valid).toBe(false);
+    expect(verification.reason).toContain('future');
+  });
+
+  test('verify accepts attestation within drift tolerance', async () => {
+    const now = Date.now();
+    const config = makeConfig({ clockSource: () => now });
+    const ism = createISM(config);
+    
+    const result = await ism.attest({
+      data: 'legit',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    expect('error' in result).toBe(false);
+    
+    // Attestation with current time should verify fine
+    const verification = await ism.verify(result as InputAttestation);
+    expect(verification.valid).toBe(true);
+  });
+});

@@ -18,6 +18,9 @@ const MAX_INPUT_SIZE = 1_048_576;
 // Replay cache size
 const REPLAY_CACHE_MAX = 10_000;
 
+// Timestamp drift tolerance (5 minutes)
+const MAX_CLOCK_DRIFT_MS = 5 * 60 * 1000;
+
 // Input types that can be attested
 export type InputType = 
   | 'blockchain_event'   // On-chain event (self-attesting)
@@ -62,6 +65,10 @@ export interface ISMConfig {
   approved_sources: ApprovedSource[];
   /** Max input size in bytes (default: 1MB) */
   maxInputSize?: number;
+  /** Max allowed clock drift in ms (default: 5 min) */
+  maxClockDriftMs?: number;
+  /** Clock source for testing (default: Date.now) */
+  clockSource?: () => number;
 }
 
 export interface ApprovedSource {
@@ -88,6 +95,8 @@ export function createISM(config: ISMConfig) {
   const pubkey = ed.getPublicKey(config.private_key);
   const pubkeyHex = Buffer.from(pubkey).toString('hex');
   const maxSize = config.maxInputSize ?? MAX_INPUT_SIZE;
+  const maxDrift = config.maxClockDriftMs ?? MAX_CLOCK_DRIFT_MS;
+  const clock = config.clockSource ?? Date.now;
   
   // Per-instance sequence counter (P1 fix: was global)
   let sequenceCounter = 0;
@@ -167,7 +176,12 @@ export function createISM(config: ISMConfig) {
       }
       replayCache.add(replayKey);
       
-      // 9. Build attestation
+      // 9. Build attestation with timestamp bounds check
+      const now = clock();
+      if (now < 0 || !Number.isFinite(now)) {
+        return { error: 'Clock error' };
+      }
+      
       const attestation: Omit<InputAttestation, 'sig'> = {
         schema: 'ism.input.v0',
         ism_id: config.ism_id,
@@ -175,7 +189,7 @@ export function createISM(config: ISMConfig) {
         input_hash: inputHash,
         input_type: input.source_type,
         input_source: input.source_id,
-        received_at: Date.now(),
+        received_at: now,
         sequence: ++sequenceCounter,
         source_signature: input.source_signature,
         block_hash: input.block_hash,
@@ -196,10 +210,16 @@ export function createISM(config: ISMConfig) {
     },
     
     /**
-     * Verify an attestation's ISM signature
+     * Verify an attestation's ISM signature and timestamp bounds
      */
     async verify(attestation: InputAttestation): Promise<{ valid: boolean; reason?: string }> {
       try {
+        // Check timestamp bounds: not in the future beyond drift tolerance
+        const now = clock();
+        if (attestation.received_at > now + maxDrift) {
+          return { valid: false, reason: 'Attestation timestamp is in the future' };
+        }
+        
         const { sig, ...payload } = attestation;
         const payloadStr = JSON.stringify(payload);
         const payloadHash = sha256(new TextEncoder().encode(payloadStr));
