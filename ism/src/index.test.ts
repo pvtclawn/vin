@@ -113,7 +113,7 @@ describe('ISM - attest', () => {
     
     const result = await ism.attest(input);
     expect('error' in result).toBe(true);
-    expect((result as { error: string }).error).toContain('not approved');
+    expect((result as { error: string }).error).toBe('Input rejected');
   });
 
   test('rejects mismatched source type', async () => {
@@ -126,7 +126,7 @@ describe('ISM - attest', () => {
     
     const result = await ism.attest(input);
     expect('error' in result).toBe(true);
-    expect((result as { error: string }).error).toContain('type mismatch');
+    expect((result as { error: string }).error).toBe('Input rejected');
   });
 
   test('rejects api_signed without signature when pubkey configured', async () => {
@@ -147,7 +147,7 @@ describe('ISM - attest', () => {
     
     const result = await ism.attest(input);
     expect('error' in result).toBe(true);
-    expect((result as { error: string }).error).toContain('source_signature');
+    expect((result as { error: string }).error).toBe('Input rejected');
   });
 
   test('rejects blockchain event without block_hash', async () => {
@@ -161,49 +161,48 @@ describe('ISM - attest', () => {
     
     const result = await ism.attest(input);
     expect('error' in result).toBe(true);
-    expect((result as { error: string }).error).toContain('block_hash');
+    expect((result as { error: string }).error).toBe('Input rejected');
   });
 
-  test('input hash is deterministic for same data', async () => {
-    const ism = createISM(makeConfig());
+  test('input hash is deterministic for same data across instances', async () => {
+    const config = makeConfig();
+    const ism1 = createISM(config);
+    const ism2 = createISM(config);
     const input: RawInput = {
       data: 'deterministic-test',
       source_id: 'scheduler',
       source_type: 'cron',
     };
     
-    const r1 = await ism.attest(input) as InputAttestation;
-    const r2 = await ism.attest(input) as InputAttestation;
+    const r1 = await ism1.attest(input) as InputAttestation;
+    const r2 = await ism2.attest(input) as InputAttestation;
     
     expect(r1.input_hash).toBe(r2.input_hash);
   });
 
   test('sequence is monotonically increasing', async () => {
     const ism = createISM(makeConfig());
-    const input: RawInput = {
-      data: 'seq-test',
-      source_id: 'scheduler',
-      source_type: 'cron',
-    };
     
-    const r1 = await ism.attest(input) as InputAttestation;
-    const r2 = await ism.attest(input) as InputAttestation;
-    const r3 = await ism.attest(input) as InputAttestation;
+    const r1 = await ism.attest({ data: 'seq-1', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
+    const r2 = await ism.attest({ data: 'seq-2', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
+    const r3 = await ism.attest({ data: 'seq-3', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
     
     expect(r2.sequence).toBeGreaterThan(r1.sequence);
     expect(r3.sequence).toBeGreaterThan(r2.sequence);
   });
 
   test('object data is JSON-stringified for hashing', async () => {
-    const ism = createISM(makeConfig());
+    const config = makeConfig();
+    const ism1 = createISM(config);
+    const ism2 = createISM(config);
     
-    const objResult = await ism.attest({
+    const objResult = await ism1.attest({
       data: { key: 'value' },
       source_id: 'scheduler',
       source_type: 'cron',
     }) as InputAttestation;
     
-    const strResult = await ism.attest({
+    const strResult = await ism2.attest({
       data: '{"key":"value"}',
       source_id: 'scheduler',
       source_type: 'cron',
@@ -328,5 +327,137 @@ describe('ISM - edge cases', () => {
     });
     
     expect('error' in result).toBe(false);
+  });
+});
+
+describe('ISM - P0/P1 hardening', () => {
+  test('verifies valid Ed25519 source signature', async () => {
+    const sourceKey = new Uint8Array(32);
+    crypto.getRandomValues(sourceKey);
+    const sourcePubkey = Buffer.from(ed.getPublicKey(sourceKey)).toString('hex');
+    
+    const config = makeConfig({
+      approved_sources: [
+        { id: 'signed-oracle', type: 'api_signed', pubkey: sourcePubkey },
+      ],
+    });
+    const ism = createISM(config);
+    
+    const inputData = 'price: ETH/USD 3200.50';
+    const inputBytes = new TextEncoder().encode(inputData);
+    const sig = await ed.signAsync(inputBytes, sourceKey);
+    const sigB64 = Buffer.from(sig).toString('base64url');
+    
+    const result = await ism.attest({
+      data: inputData,
+      source_id: 'signed-oracle',
+      source_type: 'api_signed',
+      source_signature: sigB64,
+    });
+    
+    expect('error' in result).toBe(false);
+    const att = result as InputAttestation;
+    expect(att.source_signature).toBe(sigB64);
+  });
+
+  test('rejects invalid Ed25519 source signature', async () => {
+    const sourceKey = new Uint8Array(32);
+    crypto.getRandomValues(sourceKey);
+    const sourcePubkey = Buffer.from(ed.getPublicKey(sourceKey)).toString('hex');
+    
+    const config = makeConfig({
+      approved_sources: [
+        { id: 'signed-oracle', type: 'api_signed', pubkey: sourcePubkey },
+      ],
+    });
+    const ism = createISM(config);
+    
+    // Sign with wrong key
+    const wrongKey = new Uint8Array(32);
+    crypto.getRandomValues(wrongKey);
+    const inputData = 'price: ETH/USD 3200.50';
+    const sig = await ed.signAsync(new TextEncoder().encode(inputData), wrongKey);
+    
+    const result = await ism.attest({
+      data: inputData,
+      source_id: 'signed-oracle',
+      source_type: 'api_signed',
+      source_signature: Buffer.from(sig).toString('base64url'),
+    });
+    
+    expect('error' in result).toBe(true);
+    expect((result as { error: string }).error).toBe('Input rejected');
+  });
+
+  test('rejects duplicate input (replay protection)', async () => {
+    const ism = createISM(makeConfig());
+    const input: RawInput = {
+      data: 'replay-me',
+      source_id: 'scheduler',
+      source_type: 'cron',
+    };
+    
+    const r1 = await ism.attest(input);
+    expect('error' in r1).toBe(false);
+    
+    const r2 = await ism.attest(input);
+    expect('error' in r2).toBe(true);
+    expect((r2 as { error: string }).error).toBe('Duplicate input rejected');
+  });
+
+  test('allows same data from different sources', async () => {
+    const config = makeConfig({
+      approved_sources: [
+        { id: 'source-a', type: 'cron' },
+        { id: 'source-b', type: 'cron' },
+      ],
+    });
+    const ism = createISM(config);
+    
+    const r1 = await ism.attest({ data: 'same-data', source_id: 'source-a', source_type: 'cron' });
+    const r2 = await ism.attest({ data: 'same-data', source_id: 'source-b', source_type: 'cron' });
+    
+    expect('error' in r1).toBe(false);
+    expect('error' in r2).toBe(false);
+  });
+
+  test('rejects oversized input', async () => {
+    const ism = createISM(makeConfig({ maxInputSize: 100 }));
+    const result = await ism.attest({
+      data: 'x'.repeat(200),
+      source_id: 'scheduler',
+      source_type: 'cron',
+    });
+    
+    expect('error' in result).toBe(true);
+    expect((result as { error: string }).error).toBe('Input too large');
+  });
+
+  test('per-instance sequence counters are independent', async () => {
+    const ism1 = createISM(makeConfig({ ism_id: 'ism-1' }));
+    const ism2 = createISM(makeConfig({ ism_id: 'ism-2' }));
+    
+    const r1 = await ism1.attest({ data: 'a', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
+    const r2 = await ism1.attest({ data: 'b', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
+    const r3 = await ism2.attest({ data: 'c', source_id: 'scheduler', source_type: 'cron' }) as InputAttestation;
+    
+    expect(r1.sequence).toBe(1);
+    expect(r2.sequence).toBe(2);
+    expect(r3.sequence).toBe(1); // Independent counter
+  });
+
+  test('error messages do not leak approved source IDs', async () => {
+    const ism = createISM(makeConfig());
+    
+    const result = await ism.attest({
+      data: 'probe',
+      source_id: 'unknown-source',
+      source_type: 'cron',
+    });
+    
+    const error = (result as { error: string }).error;
+    expect(error).not.toContain('unknown-source');
+    expect(error).not.toContain('scheduler');
+    expect(error).toBe('Input rejected');
   });
 });
