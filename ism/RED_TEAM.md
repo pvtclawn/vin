@@ -25,5 +25,10 @@
 5. Block hash verification needs RPC call — design decision on whether ISM should have network access
 
 ## Status
-- Prototype: 184 LOC, 20 tests
-- Ready for: P0 fixes → then production hardening pass
+- Prototype: 210+ LOC, 27 tests (was 20)
+- **P0 #1 FIXED**: Ed25519 source signature verification implemented
+- **P1 #3 FIXED**: Sequence counter moved to per-instance
+- **P1 #4 FIXED**: Replay detection with bounded Set (10k max)
+- **P1 #6 FIXED**: Input size limit (1MB default, configurable)
+- **P2 #7 FIXED**: Generic "Input rejected" errors prevent source enumeration
+- Remaining: P0 #2 (block hash RPC verification — design decision), P1 #5, P2 #8, P2 #9
